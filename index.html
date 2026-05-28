@@ -12,9 +12,14 @@
     <link rel="stylesheet" href="/src/style.css" />
     <link rel="manifest" href="/manifest.json" />
     <link rel="apple-touch-icon" href="/icons/icon-192x192.png" />
+    <link rel="icon" type="image/x-icon" href="/icons/icon-192x192.png" />
   </head>
   <body>
     <div id="app-container">
+      <div id="measure-display" class="measure-display hidden">
+        <span id="measure-output">0.00 m</span>
+      </div>
+
       <div id="map" class="map">
         <div class="draw-toolbar">
           <button
@@ -110,6 +115,14 @@
       </aside>
 
       <nav class="bottom-toolbar">
+        <button
+          id="btn-toggle-basemap"
+          class="tool-btn"
+          aria-label="Toggle Basemap"
+          title="Switch to Satellite"
+        >
+          🌍
+        </button>
         <button id="btn-locate" class="tool-btn" aria-label="Live Location">
           📍
         </button>
