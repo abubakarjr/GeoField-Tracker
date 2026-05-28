@@ -8,7 +8,82 @@
   </head>
   <body>
     <div id="app-container">
-      <div id="map" class="map"></div>
+      <div id="map" class="map">
+        <div class="draw-toolbar">
+          <button
+            type="button"
+            id="btn-draw-point"
+            class="tool-btn small-btn"
+            aria-label="Draw Point"
+            title="Point"
+          >
+            📍
+          </button>
+          <button
+            type="button"
+            id="btn-draw-line"
+            class="tool-btn small-btn"
+            aria-label="Draw Line"
+            title="Line"
+          >
+            📏
+          </button>
+          <button
+            type="button"
+            id="btn-draw-poly"
+            class="tool-btn small-btn"
+            aria-label="Draw Polygon"
+            title="Polygon"
+          >
+            🛑
+          </button>
+          <button
+            type="button"
+            id="btn-clear"
+            class="tool-btn small-btn danger-btn"
+            aria-label="Clear All"
+            title="Clear"
+          >
+            🗑️
+          </button>
+        </div>
+      </div>
+
+      <aside id="metadata-panel" class="side-panel hidden">
+        <div class="panel-header">
+          <h3>Feature Details</h3>
+          <button id="btn-close-panel" class="close-btn" aria-label="Close">
+            ×
+          </button>
+        </div>
+        <div class="panel-body">
+          <label for="feat-title">Name/ID:</label>
+          <input
+            type="text"
+            id="feat-title"
+            placeholder="e.g., Farm Plot A1 or Incident Site"
+          />
+
+          <label for="feat-type">Category:</label>
+          <select id="feat-type">
+            <option value="agriculture">Agriculture / Farm</option>
+            <option value="security">Security / Border</option>
+            <option value="climate">Climate / Environment</option>
+            <option value="infrastructure">Infrastructure</option>
+          </select>
+
+          <label for="feat-desc">Observations/Notes:</label>
+          <textarea
+            id="feat-desc"
+            rows="4"
+            placeholder="Enter field notes here..."
+          ></textarea>
+
+          <button id="btn-save-meta" class="action-btn">
+            Save Feature Data
+          </button>
+        </div>
+      </aside>
 
       <nav class="bottom-toolbar">
         <button id="btn-locate" class="tool-btn" aria-label="Live Location">
