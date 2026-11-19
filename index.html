@@ -2,87 +2,354 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
+    />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta
       name="apple-mobile-web-app-status-bar-style"
       content="black-translucent"
     />
-    <title>GeoField Tracker</title>
+    <meta name="theme-color" content="#0f4c5c" />
+    <title>GeoField Tracker — Spatial Intelligence & NIPOST GIS</title>
     <link rel="stylesheet" href="/src/style.css" />
     <link rel="manifest" href="/manifest.json" />
     <link rel="apple-touch-icon" href="/icons/icon-192x192.png" />
-    <link rel="icon" type="image/x-icon" href="/icons/icon-192x192.png" />
+    <link rel="icon" type="image/png" href="/icons/icon-192x192.png" />
   </head>
   <body>
     <div id="app-container">
+      <!-- Top Floating HUD: Brand, Status & NIPOST Postcode Search -->
+      <header class="top-hud">
+        <div class="brand-pill">
+          <div class="brand-title">
+            <svg
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2.2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <polygon
+                points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21"
+              ></polygon>
+              <line x1="9" y1="3" x2="9" y2="18"></line>
+              <line x1="15" y1="6" x2="15" y2="21"></line>
+            </svg>
+            <span>GeoField</span>
+          </div>
+          <div class="hud-badges">
+            <span id="network-badge" class="status-pill online">
+              <span class="dot"></span>
+              <span id="network-text">Online</span>
+            </span>
+            <span id="feature-count" class="count-pill">0 Features</span>
+          </div>
+        </div>
+
+        <div class="search-wrapper">
+          <div class="search-bar">
+            <svg
+              class="search-icon"
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2.2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <circle cx="11" cy="11" r="8"></circle>
+              <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+            </svg>
+            <input
+              type="text"
+              id="map-search-input"
+              placeholder="Search NIPOST postcode (e.g. FC01A01KP27) or area..."
+              autocomplete="off"
+            />
+            <button
+              type="button"
+              id="btn-clear-search"
+              class="icon-clear hidden"
+              aria-label="Clear search"
+            >
+              ×
+            </button>
+            <button type="button" id="btn-map-search" class="search-submit-btn">
+              Locate
+            </button>
+          </div>
+          <div
+            id="search-results-dropdown"
+            class="search-dropdown hidden"
+          ></div>
+        </div>
+      </header>
+
+      <!-- Live Measurement Banner -->
       <div id="measure-display" class="measure-display hidden">
+        <svg
+          width="15"
+          height="15"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2.2"
+        >
+          <path
+            d="M21.3 15.3a2.4 2.4 0 0 1 0 3.4l-2.6 2.6a2.4 2.4 0 0 1-3.4 0L2.7 8.7a2.41 2.41 0 0 1 0-3.4l2.6-2.6a2.41 2.41 0 0 1 3.4 0Z"
+          ></path>
+          <path d="m14.5 12.5 2-2"></path>
+          <path d="m11.5 9.5 2-2"></path>
+          <path d="m8.5 6.5 2-2"></path>
+          <path d="m17.5 15.5 2-2"></path>
+        </svg>
         <span id="measure-output">0.00 m</span>
       </div>
 
+      <!-- Main OpenLayers Map Canvas -->
       <div id="map" class="map">
-        <div class="draw-toolbar">
+        <!-- Floating Map Popup Overlay for Searched Postcode -->
+        <div id="map-popup" class="ol-popup hidden">
+          <button
+            type="button"
+            id="popup-close"
+            class="ol-popup-closer"
+            aria-label="Close popup"
+          >
+            ×
+          </button>
+          <div class="popup-header-tag">NIPOST VERIFIED LOCATION</div>
+          <div id="popup-postcode" class="popup-postcode">FC-01-A01-KP-27</div>
+          <div id="popup-admin" class="popup-admin">
+            Abuja • Municipal Area Council
+          </div>
+          <div id="popup-coords" class="popup-coords">
+            9.05850° N, 7.48906° E
+          </div>
+          <button
+            type="button"
+            id="popup-save-feature"
+            class="popup-action-btn"
+          >
+            + Save Pin to Field Data
+          </button>
+        </div>
+
+        <!-- Left Floating GIS Tool Dock -->
+        <div
+          class="draw-toolbar"
+          role="toolbar"
+          aria-label="GIS Drawing and Export Tools"
+        >
+          <button
+            type="button"
+            id="btn-select-feature"
+            class="tool-btn small-btn"
+            aria-label="Inspect or Edit Feature"
+            title="Inspect / Edit Feature"
+          >
+            <svg
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="m3 3 7.07 16.97 2.51-7.39 7.39-2.51L3 3z"></path>
+              <path d="m13 13 6 6"></path>
+            </svg>
+          </button>
           <button
             type="button"
             id="btn-draw-point"
             class="tool-btn small-btn"
-            aria-label="Draw Point"
-            title="Point"
+            aria-label="Plot Point"
+            title="Plot Point"
           >
-            📍
+            <svg
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"></path>
+              <circle cx="12" cy="10" r="3"></circle>
+            </svg>
           </button>
           <button
             type="button"
             id="btn-draw-line"
             class="tool-btn small-btn"
-            aria-label="Draw Line"
-            title="Line"
+            aria-label="Draw Route or Line"
+            title="Draw Line / Route"
           >
-            📏
+            <svg
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <circle cx="6" cy="19" r="3"></circle>
+              <path
+                d="M9 19h8.5a3.5 3.5 0 0 0 0-7h-11a3.5 3.5 0 0 1 0-7H15"
+              ></path>
+              <circle cx="18" cy="5" r="3"></circle>
+            </svg>
           </button>
           <button
             type="button"
             id="btn-draw-poly"
             class="tool-btn small-btn"
-            aria-label="Draw Polygon"
-            title="Polygon"
+            aria-label="Draw Boundary Polygon"
+            title="Draw Area Polygon"
           >
-            🛑
+            <svg
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <polygon points="12 2 22 8.5 19 21 5 21 2 8.5 12 2"></polygon>
+            </svg>
           </button>
-          <button
-            type="button"
-            id="btn-clear"
-            class="tool-btn small-btn danger-btn"
-            aria-label="Clear All"
-            title="Clear"
-          >
-            🗑️
-          </button>
+
           <div class="export-divider"></div>
+
           <button
             type="button"
             id="btn-export-geojson"
-            class="tool-btn small-btn action-btn"
+            class="tool-btn small-btn export-btn"
             aria-label="Export GeoJSON"
             title="Export GeoJSON"
           >
-            🌐
+            <span class="btn-tag">JSON</span>
           </button>
           <button
             type="button"
             id="btn-export-csv"
-            class="tool-btn small-btn action-btn"
+            class="tool-btn small-btn export-btn"
             aria-label="Export CSV"
-            title="Export CSV"
+            title="Export CSV with Postcodes"
           >
-            📊
+            <span class="btn-tag">CSV</span>
+          </button>
+
+          <div class="export-divider"></div>
+
+          <button
+            type="button"
+            id="btn-clear"
+            class="tool-btn small-btn danger-btn"
+            aria-label="Clear All Features"
+            title="Clear All Features"
+          >
+            <svg
+              width="17"
+              height="17"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <polyline points="3 6 5 6 21 6"></polyline>
+              <path
+                d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"
+              ></path>
+            </svg>
           </button>
         </div>
       </div>
 
-      <aside id="metadata-panel" class="side-panel hidden">
+      <!-- Bottom-Left Live Coordinate Status Bar -->
+      <div id="coord-readout" class="coord-readout">
+        9.05851° N, 7.48906° E • EPSG:4326
+      </div>
+
+      <!-- Bottom-Right Basemap & GPS Controls -->
+      <nav class="bottom-toolbar" aria-label="Map Navigation Controls">
+        <button
+          type="button"
+          id="btn-toggle-basemap"
+          class="tool-btn"
+          aria-label="Switch Basemap"
+          title="Switch to Satellite"
+        >
+          <svg
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <polygon points="12 2 2 7 12 12 22 7 12 2"></polygon>
+            <polyline points="2 17 12 22 22 17"></polyline>
+            <polyline points="2 12 12 17 22 12"></polyline>
+          </svg>
+        </button>
+        <button
+          type="button"
+          id="btn-locate"
+          class="tool-btn"
+          aria-label="Live GPS Tracking"
+          title="Live GPS Location"
+        >
+          <svg
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2.2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <circle cx="12" cy="12" r="3"></circle>
+            <path d="M12 2v3"></path>
+            <path d="M12 19v3"></path>
+            <path d="M2 12h3"></path>
+            <path d="M19 12h3"></path>
+          </svg>
+        </button>
+      </nav>
+
+      <!-- Slide-Over Attribute & Postcode Drawer -->
+      <aside
+        id="metadata-panel"
+        class="side-panel hidden"
+        aria-label="Feature Metadata Form"
+      >
         <div class="panel-header">
-          <h3>Feature Details</h3>
+          <div>
+            <h3>Field Feature Details</h3>
+            <span id="feat-geom-badge" class="geom-badge">POINT FEATURE</span>
+          </div>
           <button
             type="button"
             id="btn-close-panel"
@@ -92,32 +359,41 @@
             ×
           </button>
         </div>
+
         <div class="panel-body">
-          <label for="feat-title">Name/ID:</label>
-          <input
-            type="text"
-            id="feat-title"
-            placeholder="e.g., Farm Plot A1 or Incident Site"
-          />
+          <div class="field-group">
+            <label for="feat-title">Feature Name / Asset ID</label>
+            <input
+              type="text"
+              id="feat-title"
+              placeholder="e.g., Borehole #4, Patrol Checkpoint, Farm Plot A1"
+            />
+          </div>
 
-          <label for="feat-type">Category:</label>
-          <select id="feat-type">
-            <option value="agriculture">Agriculture / Farm</option>
-            <option value="security">Security / Border</option>
-            <option value="climate">Climate / Environment</option>
-            <option value="infrastructure">Infrastructure</option>
-          </select>
+          <div class="field-group">
+            <label for="feat-type">Sector / Category</label>
+            <select id="feat-type">
+              <option value="agriculture">Agriculture & Land Parcel</option>
+              <option value="security">Security & Border Patrol</option>
+              <option value="emergency">Emergency & Public Safety</option>
+              <option value="utilities">Utilities & Infrastructure</option>
+              <option value="climate">Climate & Environment</option>
+            </select>
+          </div>
 
+          <!-- NIPOST Postcode Verification Card -->
           <div class="postcode-section">
-            <label for="feat-postcode"
-              >NIPOST Building Postcode (11-Char):</label
-            >
+            <div class="postcode-card-header">
+              <label for="feat-postcode">NIPOST Building Postcode</label>
+              <span class="api-chip">NIPOST API</span>
+            </div>
+
             <div class="postcode-input-row">
               <input
                 type="text"
                 id="feat-postcode"
                 maxlength="15"
-                placeholder="e.g., FC01A01KP27"
+                placeholder="e.g. FC01A01KP27"
               />
               <button
                 type="button"
@@ -130,61 +406,60 @@
                 type="button"
                 id="btn-gps-postcode"
                 class="postcode-sub-btn secondary"
-                title="Find postcode from feature coordinates"
+                title="Detect postcode from feature GPS coordinates"
               >
                 GPS
               </button>
             </div>
+
             <small id="postcode-status" class="postcode-status">
-              Enter postcode or tap GPS to lookup
+              Enter 11-char postcode or tap GPS to lookup
             </small>
 
             <div class="postcode-admin-grid">
-              <input type="text" id="feat-state" placeholder="State" readonly />
-              <input type="text" id="feat-lga" placeholder="LGA" readonly />
-              <input type="text" id="feat-ward" placeholder="Ward" readonly />
-              <input
-                type="text"
-                id="feat-district"
-                placeholder="District / Area"
-                readonly
-              />
+              <div class="mini-field">
+                <span>State</span>
+                <input type="text" id="feat-state" placeholder="—" readonly />
+              </div>
+              <div class="mini-field">
+                <span>LGA</span>
+                <input type="text" id="feat-lga" placeholder="—" readonly />
+              </div>
+              <div class="mini-field">
+                <span>Ward</span>
+                <input type="text" id="feat-ward" placeholder="—" readonly />
+              </div>
+              <div class="mini-field">
+                <span>District / Area</span>
+                <input
+                  type="text"
+                  id="feat-district"
+                  placeholder="—"
+                  readonly
+                />
+              </div>
             </div>
           </div>
 
-          <label for="feat-desc">Observations/Notes:</label>
-          <textarea
-            id="feat-desc"
-            rows="3"
-            placeholder="Enter field notes here..."
-          ></textarea>
+          <div class="field-group">
+            <label for="feat-desc">Field Observations & Notes</label>
+            <textarea
+              id="feat-desc"
+              rows="3"
+              placeholder="Condition, severity, landmarks, or dispatch instructions..."
+            ></textarea>
+          </div>
 
-          <button type="button" id="btn-save-meta" class="action-btn">
-            Save Feature Data
+          <button type="button" id="btn-save-meta" class="primary-save-btn">
+            Save Feature & Postcode
           </button>
         </div>
       </aside>
 
-      <nav class="bottom-toolbar">
-        <button
-          type="button"
-          id="btn-toggle-basemap"
-          class="tool-btn"
-          aria-label="Toggle Basemap"
-          title="Switch to Satellite"
-        >
-          🌍
-        </button>
-        <button
-          type="button"
-          id="btn-locate"
-          class="tool-btn"
-          aria-label="Live Location"
-        >
-          📍
-        </button>
-      </nav>
+      <!-- Non-Blocking Toast Notification Container -->
+      <div id="toast-container" class="toast-container"></div>
     </div>
+
     <script type="module" src="/src/main.js"></script>
   </body>
 </html>

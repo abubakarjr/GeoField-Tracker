@@ -6,10 +6,11 @@ import {
   normalizePostcode,
 } from './postcode.js';
 
-export function setupUI(getVectorSource) {
+export function setupUI(getVectorSource, showToast = () => {}) {
   const panel = document.getElementById('metadata-panel');
   const closeBtn = document.getElementById('btn-close-panel');
   const saveBtn = document.getElementById('btn-save-meta');
+  const geomBadge = document.getElementById('feat-geom-badge');
 
   const titleInput = document.getElementById('feat-title');
   const typeSelect = document.getElementById('feat-type');
@@ -47,12 +48,16 @@ export function setupUI(getVectorSource) {
     }
   }
 
-  // Open the panel and attach the active feature
   async function openMetadataPanel(feature) {
     currentFeature = feature;
     const props = feature.getProperties ? feature.getProperties() : {};
+    const geomType = feature.getGeometry ? feature.getGeometry().getType().toUpperCase() : 'FEATURE';
 
-    // Populate existing values or reset for a newly drawn feature
+    if (geomBadge) {
+      const meas = props.measurement ? ` • ${props.measurement}` : '';
+      geomBadge.textContent = `${geomType}${meas}`;
+    }
+
     titleInput.value = props.title || '';
     typeSelect.value = props.type || 'agriculture';
     descInput.value = props.description || '';
@@ -65,9 +70,8 @@ export function setupUI(getVectorSource) {
 
     panel.classList.remove('hidden');
 
-    // Automatically attempt NIPOST Search from drawn geometry if online and no postcode is set yet
     if (!props.postcode && navigator.onLine && feature.getGeometry) {
-      setStatus('Checking NIPOST API for coordinates...', 'loading');
+      setStatus('Querying NIPOST API for coordinates...', 'loading');
       const result = await searchPostcodeByGeometry(feature.getGeometry());
       if (currentFeature === feature) {
         applyPostcodeResult(result);
@@ -75,11 +79,13 @@ export function setupUI(getVectorSource) {
     } else if (!navigator.onLine) {
       setStatus('Offline mode: enter postcode manually or sync later.', 'offline_pending');
     } else {
-      setStatus('Enter postcode or tap GPS to lookup', props.postcodeStatus || '');
+      setStatus(
+        props.postcode ? 'Postcode attached to feature.' : 'Enter postcode or tap GPS to lookup',
+        props.postcodeStatus || ''
+      );
     }
   }
 
-  // Close the panel
   function closePanel() {
     panel.classList.add('hidden');
     currentFeature = null;
@@ -87,7 +93,6 @@ export function setupUI(getVectorSource) {
 
   closeBtn.addEventListener('click', closePanel);
 
-  // Verify typed 11-character postcode via NIPOST Lookup API
   verifyBtn.addEventListener('click', async () => {
     verifyBtn.disabled = true;
     setStatus('Verifying postcode with NIPOST...', 'loading');
@@ -99,7 +104,6 @@ export function setupUI(getVectorSource) {
     }
   });
 
-  // Search postcode from feature coordinates via NIPOST Search API
   gpsLookupBtn.addEventListener('click', async () => {
     if (!currentFeature) return;
     gpsLookupBtn.disabled = true;
@@ -115,7 +119,6 @@ export function setupUI(getVectorSource) {
     }
   });
 
-  // Save the form data directly into the OpenLayers feature & IndexedDB
   saveBtn.addEventListener('click', async () => {
     if (!currentFeature) return;
 
@@ -136,21 +139,31 @@ export function setupUI(getVectorSource) {
       lga: lgaInput.value.trim(),
       ward: wardInput.value.trim(),
       district: districtInput.value.trim(),
-      timestamp: new Date().toISOString(),
+      timestamp: propsTimestampOrNow(currentFeature),
     });
 
-    // Resolve getter function passed from main.js
+    // Force map layer re-render so the postcode label updates immediately on the map
+    currentFeature.changed();
+
     const source =
       typeof getVectorSource === 'function' ? getVectorSource() : getVectorSource;
 
     if (source) {
       await saveLayerToLocal(source);
-      console.log('💾 Feature and NIPOST postcode metadata stored offline.');
     }
 
-    alert('Feature saved successfully!');
+    showToast(
+      postcode
+        ? `Saved "${title}" (${postcode}) offline`
+        : `Saved "${title}" to local storage`,
+      'success'
+    );
     closePanel();
   });
 
   return { openMetadataPanel };
+}
+
+function propsTimestampOrNow(feature) {
+  return feature.get('timestamp') || new Date().toISOString();
 }
