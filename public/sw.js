@@ -1,7 +1,6 @@
 // public/sw.js
-const CACHE_NAME = 'geofield-cache-v2'; // Bumped version to force update
+const CACHE_NAME = 'geofield-cache-v3';
 
-// Add the manifest and icons to the cache payload
 const ASSETS_TO_CACHE = [
   '/',
   '/index.html',
@@ -16,11 +15,10 @@ self.addEventListener('install', (event) => {
       return cache.addAll(ASSETS_TO_CACHE);
     })
   );
-  self.skipWaiting(); // Force the waiting service worker to become the active service worker
+  self.skipWaiting();
 });
 
 self.addEventListener('activate', (event) => {
-  // Clean up old caches when a new version is installed
   event.waitUntil(
     caches.keys().then((cacheNames) => {
       return Promise.all(
@@ -36,6 +34,11 @@ self.addEventListener('activate', (event) => {
 });
 
 self.addEventListener('fetch', (event) => {
+  // Always let live NIPOST Postcode API requests go straight to the network
+  if (event.request.url.includes('postcode.gov.ng')) {
+    return;
+  }
+
   event.respondWith(
     caches.match(event.request).then((response) => {
       return response || fetch(event.request);

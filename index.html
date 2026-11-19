@@ -60,6 +60,7 @@
           </button>
           <div class="export-divider"></div>
           <button
+            type="button"
             id="btn-export-geojson"
             class="tool-btn small-btn action-btn"
             aria-label="Export GeoJSON"
@@ -68,6 +69,7 @@
             🌐
           </button>
           <button
+            type="button"
             id="btn-export-csv"
             class="tool-btn small-btn action-btn"
             aria-label="Export CSV"
@@ -81,7 +83,12 @@
       <aside id="metadata-panel" class="side-panel hidden">
         <div class="panel-header">
           <h3>Feature Details</h3>
-          <button id="btn-close-panel" class="close-btn" aria-label="Close">
+          <button
+            type="button"
+            id="btn-close-panel"
+            class="close-btn"
+            aria-label="Close"
+          >
             ×
           </button>
         </div>
@@ -101,14 +108,58 @@
             <option value="infrastructure">Infrastructure</option>
           </select>
 
+          <div class="postcode-section">
+            <label for="feat-postcode"
+              >NIPOST Building Postcode (11-Char):</label
+            >
+            <div class="postcode-input-row">
+              <input
+                type="text"
+                id="feat-postcode"
+                maxlength="15"
+                placeholder="e.g., FC01A01KP27"
+              />
+              <button
+                type="button"
+                id="btn-verify-postcode"
+                class="postcode-sub-btn"
+              >
+                Verify
+              </button>
+              <button
+                type="button"
+                id="btn-gps-postcode"
+                class="postcode-sub-btn secondary"
+                title="Find postcode from feature coordinates"
+              >
+                GPS
+              </button>
+            </div>
+            <small id="postcode-status" class="postcode-status">
+              Enter postcode or tap GPS to lookup
+            </small>
+
+            <div class="postcode-admin-grid">
+              <input type="text" id="feat-state" placeholder="State" readonly />
+              <input type="text" id="feat-lga" placeholder="LGA" readonly />
+              <input type="text" id="feat-ward" placeholder="Ward" readonly />
+              <input
+                type="text"
+                id="feat-district"
+                placeholder="District / Area"
+                readonly
+              />
+            </div>
+          </div>
+
           <label for="feat-desc">Observations/Notes:</label>
           <textarea
             id="feat-desc"
-            rows="4"
+            rows="3"
             placeholder="Enter field notes here..."
           ></textarea>
 
-          <button id="btn-save-meta" class="action-btn">
+          <button type="button" id="btn-save-meta" class="action-btn">
             Save Feature Data
           </button>
         </div>
@@ -116,6 +167,7 @@
 
       <nav class="bottom-toolbar">
         <button
+          type="button"
           id="btn-toggle-basemap"
           class="tool-btn"
           aria-label="Toggle Basemap"
@@ -123,7 +175,12 @@
         >
           🌍
         </button>
-        <button id="btn-locate" class="tool-btn" aria-label="Live Location">
+        <button
+          type="button"
+          id="btn-locate"
+          class="tool-btn"
+          aria-label="Live Location"
+        >
           📍
         </button>
       </nav>

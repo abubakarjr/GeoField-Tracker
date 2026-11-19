@@ -13,7 +13,7 @@ body,
 html {
   width: 100%;
   height: 100%;
-  overflow: hidden; /* Prevents mobile bounce/scroll */
+  overflow: hidden;
   font-family:
     system-ui,
     -apple-system,
@@ -40,7 +40,8 @@ html {
   bottom: 20px;
   right: 20px;
   display: flex;
-  gap: 10px;
+  flex-direction: column;
+  gap: 15px;
   z-index: 1000;
 }
 
@@ -99,7 +100,7 @@ html {
 }
 
 .small-btn {
-  width: 44px; /* Mobile touch target standard */
+  width: 44px;
   height: 44px;
   font-size: 20px;
   background: white;
@@ -113,6 +114,15 @@ html {
   border-color: var(--primary-color);
 }
 
+.small-btn.action-btn {
+  margin-top: 0;
+  padding: 0;
+  border-radius: 50%;
+  background: #f0f8ff;
+  color: var(--primary-color);
+  border: 1px solid var(--primary-color);
+}
+
 .danger-btn {
   background: #fff0f0;
   border-color: #ffcccc;
@@ -122,13 +132,20 @@ html {
   background: #e74c3c;
 }
 
+.export-divider {
+  width: 100%;
+  height: 2px;
+  background-color: #ddd;
+  margin: 5px 0;
+}
+
 /* Sidebar Form UI */
 .side-panel {
   position: absolute;
   top: 0;
   right: 0;
   width: 100%;
-  max-width: 350px; /* Limits width on tablets/desktops, full width on phones */
+  max-width: 360px;
   height: 100%;
   background: white;
   z-index: 2000;
@@ -161,10 +178,10 @@ html {
 }
 
 .panel-body {
-  padding: 20px;
+  padding: 18px 20px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
   overflow-y: auto;
 }
 
@@ -172,7 +189,7 @@ html {
   font-size: 14px;
   font-weight: 600;
   color: #333;
-  margin-top: 10px;
+  margin-top: 6px;
 }
 
 .panel-body input,
@@ -182,11 +199,98 @@ html {
   padding: 10px;
   border: 1px solid #ccc;
   border-radius: 6px;
-  font-size: 16px; /* 16px prevents iOS auto-zoom on inputs */
+  font-size: 16px;
 }
 
-.action-btn {
-  margin-top: 20px;
+/* NIPOST Postcode Section */
+.postcode-section {
+  margin-top: 8px;
+  padding: 12px;
+  background: #f4f9fa;
+  border: 1px solid #cbe0e4;
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.postcode-section label {
+  margin-top: 0;
+  color: var(--primary-color);
+}
+
+.postcode-input-row {
+  display: flex;
+  gap: 6px;
+}
+
+.postcode-input-row input {
+  flex: 1;
+  text-transform: uppercase;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+}
+
+.postcode-sub-btn {
+  padding: 0 12px;
+  background: var(--primary-color);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.postcode-sub-btn.secondary {
+  background: white;
+  color: var(--primary-color);
+  border: 1px solid var(--primary-color);
+}
+
+.postcode-sub-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.postcode-status {
+  font-size: 12px;
+  color: #4a5568;
+  line-height: 1.3;
+}
+
+.postcode-status[data-status="verified"] {
+  color: #15803d;
+  font-weight: 600;
+}
+
+.postcode-status[data-status="offline_pending"] {
+  color: #b45309;
+  font-weight: 600;
+}
+
+.postcode-status[data-status="invalid_format"],
+.postcode-status[data-status="not_found"] {
+  color: #b91c1c;
+  font-weight: 600;
+}
+
+.postcode-admin-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.postcode-admin-grid input {
+  padding: 7px 8px;
+  font-size: 13px;
+  background: #ffffff;
+  color: #334155;
+}
+
+#btn-save-meta.action-btn {
+  margin-top: 14px;
   padding: 12px;
   background: var(--primary-color);
   color: white;
@@ -197,21 +301,8 @@ html {
   cursor: pointer;
 }
 
-.action-btn:active {
+#btn-save-meta.action-btn:active {
   background: #0f4048;
-}
-
-/* Add this to the bottom of your style.css */
-.export-divider {
-  width: 100%;
-  height: 2px;
-  background-color: #ddd;
-  margin: 5px 0;
-}
-
-.action-btn {
-  background: #f0f8ff;
-  border-color: var(--primary-color);
 }
 
 /* Measurement Display UI */
@@ -228,25 +319,13 @@ html {
   font-size: 16px;
   z-index: 1500;
   box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
-  pointer-events: none; /* Allows users to click through the UI to the map */
+  pointer-events: none;
 }
 
 .measure-display.hidden {
   display: none;
 }
 
-/* Update your existing .bottom-toolbar to ensure buttons space out nicely */
-.bottom-toolbar {
-  position: absolute;
-  bottom: 20px;
-  right: 20px;
-  display: flex;
-  flex-direction: column; /* Stacks the buttons vertically */
-  gap: 15px;
-  z-index: 1000;
-}
-
-/* Optional: Different color for the basemap toggle to distinguish it */
 #btn-toggle-basemap {
   background: white;
   color: var(--primary-color);
