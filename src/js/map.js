@@ -8,35 +8,74 @@ import XYZ from 'ol/source/XYZ.js';
 import { fromLonLat, toLonLat } from 'ol/proj.js';
 import { defaults as defaultControls } from 'ol/control/defaults.js';
 import ScaleLine from 'ol/control/ScaleLine.js';
+import { attachOfflineTileLoader } from './offlineTiles.js';
+
+const VIEW_STORAGE_KEY = 'geofield-last-view';
+
+function getSavedView() {
+  try {
+    const raw = localStorage.getItem(VIEW_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed.center) && Number.isFinite(parsed.zoom)) {
+      return parsed;
+    }
+  } catch {
+    // Ignore storage error
+  }
+  return null;
+}
 
 export function initializeMap(targetElement) {
-  // 1. Standard Vector Map
+  const osmSource = new OSM();
+  attachOfflineTileLoader(osmSource);
+
   const osmLayer = new TileLayer({
-    source: new OSM(),
+    source: osmSource,
     visible: true,
     properties: { name: 'basemap-osm' },
   });
 
-  // 2. High-Resolution Satellite Map (Google Hybrid)
+  const satSource = new XYZ({
+    url: 'https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}',
+    crossOrigin: 'anonymous',
+  });
+  attachOfflineTileLoader(satSource);
+
   const satelliteLayer = new TileLayer({
-    source: new XYZ({
-      url: 'https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}',
-      crossOrigin: 'anonymous',
-    }),
+    source: satSource,
     visible: false,
     properties: { name: 'basemap-satellite' },
   });
+
+  const saved = getSavedView();
 
   const map = new Map({
     target: targetElement,
     layers: [osmLayer, satelliteLayer],
     view: new View({
-      center: fromLonLat([7.489064, 9.058505]), // Default: Nigeria
-      zoom: 12,
+      center: saved ? saved.center : fromLonLat([7.489064, 9.058505]),
+      zoom: saved ? saved.zoom : 12,
     }),
     controls: defaultControls({ zoom: true }).extend([
       new ScaleLine({ units: 'metric' }),
     ]),
+  });
+
+  // Persist last viewed coordinates/zoom so offline startup opens in the same area
+  map.on('moveend', () => {
+    const view = map.getView();
+    try {
+      localStorage.setItem(
+        VIEW_STORAGE_KEY,
+        JSON.stringify({
+          center: view.getCenter(),
+          zoom: view.getZoom(),
+        })
+      );
+    } catch {
+      // Ignore quota errors
+    }
   });
 
   // Update bottom-left GPS coordinate readout on pointer move

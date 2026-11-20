@@ -1,5 +1,5 @@
 // src/js/ui.js
-import { saveLayerToLocal } from './storage.js';
+import { saveLayerToLocal, removeFeatureFromLocal } from './storage.js';
 import {
   lookupPostcode,
   searchPostcodeByGeometry,
@@ -10,6 +10,7 @@ export function setupUI(getVectorSource, showToast = () => {}) {
   const panel = document.getElementById('metadata-panel');
   const closeBtn = document.getElementById('btn-close-panel');
   const saveBtn = document.getElementById('btn-save-meta');
+  const deleteBtn = document.getElementById('btn-delete-feature');
   const geomBadge = document.getElementById('feat-geom-badge');
 
   const titleInput = document.getElementById('feat-title');
@@ -51,7 +52,9 @@ export function setupUI(getVectorSource, showToast = () => {}) {
   async function openMetadataPanel(feature) {
     currentFeature = feature;
     const props = feature.getProperties ? feature.getProperties() : {};
-    const geomType = feature.getGeometry ? feature.getGeometry().getType().toUpperCase() : 'FEATURE';
+    const geomType = feature.getGeometry
+      ? feature.getGeometry().getType().toUpperCase()
+      : 'FEATURE';
 
     if (geomBadge) {
       const meas = props.measurement ? ` • ${props.measurement}` : '';
@@ -77,10 +80,15 @@ export function setupUI(getVectorSource, showToast = () => {}) {
         applyPostcodeResult(result);
       }
     } else if (!navigator.onLine) {
-      setStatus('Offline mode: enter postcode manually or sync later.', 'offline_pending');
+      setStatus(
+        'Offline mode: enter postcode manually; auto-verifies when online.',
+        'offline_pending'
+      );
     } else {
       setStatus(
-        props.postcode ? 'Postcode attached to feature.' : 'Enter postcode or tap GPS to lookup',
+        props.postcode
+          ? 'Postcode attached to feature.'
+          : 'Enter postcode or tap GPS to lookup',
         props.postcodeStatus || ''
       );
     }
@@ -139,10 +147,9 @@ export function setupUI(getVectorSource, showToast = () => {}) {
       lga: lgaInput.value.trim(),
       ward: wardInput.value.trim(),
       district: districtInput.value.trim(),
-      timestamp: propsTimestampOrNow(currentFeature),
+      timestamp: currentFeature.get('timestamp') || new Date().toISOString(),
     });
 
-    // Force map layer re-render so the postcode label updates immediately on the map
     currentFeature.changed();
 
     const source =
@@ -161,9 +168,59 @@ export function setupUI(getVectorSource, showToast = () => {}) {
     closePanel();
   });
 
-  return { openMetadataPanel };
-}
+  if (deleteBtn) {
+    deleteBtn.addEventListener('click', async () => {
+      if (!currentFeature) return;
+      const source =
+        typeof getVectorSource === 'function' ? getVectorSource() : getVectorSource;
+      if (source) {
+        source.removeFeature(currentFeature);
+      }
+      await removeFeatureFromLocal(currentFeature);
+      showToast('Feature deleted from map & offline database', 'warning');
+      closePanel();
+    });
+  }
 
-function propsTimestampOrNow(feature) {
-  return feature.get('timestamp') || new Date().toISOString();
+  // Background Auto-Sync: When network returns, verify any features saved offline
+  async function syncPendingPostcodes() {
+    if (!navigator.onLine) return;
+    const source =
+      typeof getVectorSource === 'function' ? getVectorSource() : getVectorSource;
+    if (!source) return;
+
+    const pending = source
+      .getFeatures()
+      .filter((f) => f.get('postcode') && f.get('postcodeStatus') === 'offline_pending');
+
+    if (!pending.length) return;
+
+    let syncedCount = 0;
+    for (const feat of pending) {
+      const res = await lookupPostcode(feat.get('postcode'));
+      if (res.status === 'verified') {
+        feat.setProperties({
+          postcodeStatus: 'verified',
+          state: res.admin?.state || feat.get('state') || '',
+          lga: res.admin?.lga || feat.get('lga') || '',
+          ward: res.admin?.ward || feat.get('ward') || '',
+          district: res.admin?.district || feat.get('district') || '',
+        });
+        feat.changed();
+        syncedCount++;
+      }
+    }
+
+    if (syncedCount > 0) {
+      await saveLayerToLocal(source);
+      showToast(
+        `Synced & verified ${syncedCount} offline ${syncedCount === 1 ? 'postcode' : 'postcodes'} with NIPOST`,
+        'success'
+      );
+    }
+  }
+
+  window.addEventListener('online', syncPendingPostcodes);
+
+  return { openMetadataPanel, syncPendingPostcodes };
 }

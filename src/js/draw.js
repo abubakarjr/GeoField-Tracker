@@ -12,7 +12,8 @@ import CircleStyle from 'ol/style/Circle.js';
 import Text from 'ol/style/Text.js';
 import { unByKey } from 'ol/Observable.js';
 import { formatArea, formatLength } from './measurement.js';
-import { formatHyphenatedPostcode } from './postcode.js';
+import { formatSpacedPostcode } from './postcode.js';
+import { clearLocalFeatures, saveLayerToLocal } from './storage.js';
 
 function createFeatureStyle(feature) {
   const postcode = feature.get('postcode');
@@ -20,18 +21,18 @@ function createFeatureStyle(feature) {
 
   let labelText = '';
   if (postcode) {
-    const formatted = formatHyphenatedPostcode(postcode);
+    const formatted = formatSpacedPostcode(postcode);
     labelText = title ? `${title}\n${formatted}` : formatted;
   } else if (title) {
     labelText = title;
   }
 
   return new Style({
-    fill: new Fill({ color: 'rgba(15, 76, 92, 0.28)' }),
-    stroke: new Stroke({ color: '#0f4c5c', width: 3 }),
+    fill: new Fill({ color: 'rgba(23, 93, 105, 0.32)' }),
+    stroke: new Stroke({ color: '#175d69', width: 3 }),
     image: new CircleStyle({
       radius: 7,
-      fill: new Fill({ color: '#0d9488' }),
+      fill: new Fill({ color: '#175d69' }),
       stroke: new Stroke({ color: '#ffffff', width: 2.5 }),
     }),
     text: labelText
@@ -39,9 +40,9 @@ function createFeatureStyle(feature) {
           text: labelText,
           font: '700 11px system-ui, -apple-system, sans-serif',
           fill: new Fill({ color: '#ffffff' }),
-          backgroundFill: new Fill({ color: 'rgba(15, 76, 92, 0.92)' }),
-          backgroundStroke: new Stroke({ color: '#ffffff', width: 1 }),
-          padding: [4, 7, 4, 7],
+          backgroundFill: new Fill({ color: 'rgba(23, 93, 105, 0.94)' }),
+          backgroundStroke: new Stroke({ color: '#ffffff', width: 1.2 }),
+          padding: [4, 8, 4, 8],
           offsetY: -22,
           overflow: true,
         })
@@ -49,7 +50,7 @@ function createFeatureStyle(feature) {
   });
 }
 
-export function setupDrawing(map, uiManager) {
+export function setupDrawing(map, uiManager, showToast = () => {}) {
   const source = new VectorSource({ wrapX: false });
 
   const vectorLayer = new VectorLayer({
@@ -61,9 +62,11 @@ export function setupDrawing(map, uiManager) {
   map.addLayer(vectorLayer);
 
   const modify = new Modify({ source: source });
+  modify.on('modifyend', async () => {
+    await saveLayerToLocal(source);
+  });
   map.addInteraction(modify);
 
-  // Update feature count badge whenever features change
   const countBadge = document.getElementById('feature-count');
   function updateFeatureCount() {
     if (!countBadge) return;
@@ -179,11 +182,13 @@ export function setupDrawing(map, uiManager) {
     });
   });
 
-  document.getElementById('btn-clear').addEventListener('click', () => {
-    if (confirm('Clear all drawn features from the map?')) {
+  document.getElementById('btn-clear').addEventListener('click', async () => {
+    if (confirm('Clear all drawn features from the map and offline database?')) {
       source.clear();
+      await clearLocalFeatures();
       resetButtons();
       setTool('None');
+      showToast('All features cleared from map and local storage', 'warning');
     }
   });
 

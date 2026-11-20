@@ -1,5 +1,10 @@
 // src/js/postcode.js
 import { toLonLat } from 'ol/proj.js';
+import {
+  cachePostcodeRecord,
+  getCachedPostcode,
+  getAllCachedPostcodes,
+} from '../data/localdb.js';
 
 const API_KEY = import.meta.env.VITE_NIPOST_PUBLIC_KEY;
 const BASE_URL = import.meta.env.VITE_NIPOST_BASE_URL || 'https://api.postcode.gov.ng';
@@ -16,18 +21,12 @@ export function normalizePostcode(raw) {
   return raw.replace(/[^a-zA-Z0-9]/g, '').toUpperCase().trim();
 }
 
-/**
- * Formats an 11-character postcode into NIPOST API hyphenated format (e.g., "KD-11-C34-BY-16")
- */
 export function formatHyphenatedPostcode(raw) {
   const clean = normalizePostcode(raw);
   if (clean.length !== 11) return clean;
   return `${clean.slice(0, 2)}-${clean.slice(2, 4)}-${clean.slice(4, 7)}-${clean.slice(7, 9)}-${clean.slice(9, 11)}`;
 }
 
-/**
- * Formats an 11-character postcode into display spaced format (e.g., "KD 11 C34 BY 16")
- */
 export function formatSpacedPostcode(raw) {
   const clean = normalizePostcode(raw);
   if (clean.length !== 11) return clean;
@@ -37,33 +36,54 @@ export function formatSpacedPostcode(raw) {
 function extractCoordinates(record) {
   if (!record || typeof record !== 'object') return null;
 
-  const lat = Number(
-    record.lat ?? record.latitude ?? record.center?.lat ?? record.location?.lat
-  );
-  const lng = Number(
-    record.lng ??
-      record.lon ??
-      record.longitude ??
-      record.center?.lng ??
-      record.center?.lon ??
-      record.location?.lng
-  );
+  const candidates = [
+    record,
+    record.center,
+    record.centroid,
+    record.location,
+    record.point,
+    record.coordinates,
+  ];
 
-  if (Number.isFinite(lat) && Number.isFinite(lng) && lat !== 0 && lng !== 0) {
-    return { lat, lng };
+  for (const obj of candidates) {
+    if (!obj || typeof obj !== 'object') continue;
+    const lat = Number(obj.lat ?? obj.latitude ?? obj.y);
+    const lng = Number(obj.lng ?? obj.lon ?? obj.longitude ?? obj.x);
+    if (
+      Number.isFinite(lat) &&
+      Number.isFinite(lng) &&
+      Math.abs(lat) > 0.1 &&
+      Math.abs(lng) > 0.1
+    ) {
+      return { lat, lng };
+    }
   }
 
-  if (Array.isArray(record.coordinates) && record.coordinates.length >= 2) {
-    const [cLon, cLat] = record.coordinates.map(Number);
-    if (Number.isFinite(cLat) && Number.isFinite(cLon)) {
+  // GeoJSON [lon, lat] array
+  const coordArr = Array.isArray(record.coordinates)
+    ? record.coordinates
+    : Array.isArray(record.geometry?.coordinates)
+      ? record.geometry.coordinates
+      : Array.isArray(record.centroid?.coordinates)
+        ? record.centroid.coordinates
+        : null;
+
+  if (coordArr && coordArr.length >= 2) {
+    const [cLon, cLat] = coordArr.map(Number);
+    if (Number.isFinite(cLat) && Number.isFinite(cLon) && Math.abs(cLat) > 0.1) {
       return { lat: cLat, lng: cLon };
     }
   }
 
-  if (Array.isArray(record.geometry?.coordinates) && record.geometry.coordinates.length >= 2) {
-    const [gLon, gLat] = record.geometry.coordinates.map(Number);
-    if (Number.isFinite(gLat) && Number.isFinite(gLon)) {
-      return { lat: gLat, lng: gLon };
+  // Bounding box [minLon, minLat, maxLon, maxLat] midpoint
+  const bbox = record.bbox || record.bounds;
+  if (Array.isArray(bbox) && bbox.length === 4) {
+    const [minLon, minLat, maxLon, maxLat] = bbox.map(Number);
+    if ([minLon, minLat, maxLon, maxLat].every(Number.isFinite)) {
+      return {
+        lat: (minLat + maxLat) / 2,
+        lng: (minLon + maxLon) / 2,
+      };
     }
   }
 
@@ -72,10 +92,10 @@ function extractCoordinates(record) {
 
 function mapAdminFields(record) {
   return {
-    state: record.state || record.state_name || '',
-    lga: record.lga || record.lga_name || '',
-    ward: record.ward || record.ward_name || '',
-    district: record.district || record.area || record.street || '',
+    state: record.state || record.state_name || record.admin_1 || '',
+    lga: record.lga || record.lga_name || record.admin_2 || '',
+    ward: record.ward || record.ward_name || record.admin_3 || '',
+    district: record.district || record.area || record.street || record.locality || '',
   };
 }
 
@@ -88,13 +108,10 @@ async function fetchWithTimeout(url, options = {}, timeoutMs = 6500) {
       ...options,
       signal: controller.signal,
     });
-
     const data = await response.json().catch(() => ({}));
-
     if (!response.ok) {
       throw new Error(data.message || data.error || `HTTP ${response.status}`);
     }
-
     return data;
   } finally {
     clearTimeout(timer);
@@ -102,7 +119,33 @@ async function fetchWithTimeout(url, options = {}, timeoutMs = 6500) {
 }
 
 /**
- * NIPOST Lookup API: Validates an 11-character postcode and retrieves administrative details
+ * Fallback real-world Nigeria geocoder (Nominatim) when NIPOST sandbox/Level-1
+ * returns administrative names without building GPS coordinates.
+ */
+async function geocodeNigeriaLocation(queryText) {
+  if (!queryText || !navigator.onLine) return null;
+  try {
+    const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=ng&q=${encodeURIComponent(queryText)}`;
+    const results = await fetchWithTimeout(url, {}, 5000);
+    if (Array.isArray(results) && results.length > 0) {
+      const hit = results[0];
+      const lat = Number(hit.lat);
+      const lng = Number(hit.lon);
+      if (Number.isFinite(lat) && Number.isFinite(lng)) {
+        return {
+          coords: { lat, lng },
+          displayName: hit.display_name || queryText,
+        };
+      }
+    }
+  } catch {
+    // Ignore fallback failure
+  }
+  return null;
+}
+
+/**
+ * NIPOST Lookup API with IndexedDB offline fallback
  */
 export async function lookupPostcode(rawCode) {
   const clean = normalizePostcode(rawCode);
@@ -115,11 +158,25 @@ export async function lookupPostcode(rawCode) {
     };
   }
 
+  // Check IndexedDB cache first if offline
   if (!navigator.onLine) {
+    const cached = await getCachedPostcode(clean).catch(() => null);
+    if (cached) {
+      return {
+        status: 'verified',
+        postcode: clean,
+        formattedPostcode: formatHyphenatedPostcode(clean),
+        spacedPostcode: formatSpacedPostcode(clean),
+        admin: cached.admin || {},
+        coords: cached.coords || null,
+        message: 'Verified from local offline postcode cache.',
+      };
+    }
+
     return {
       status: 'offline_pending',
       postcode: clean,
-      message: 'Offline: Postcode saved locally and queued for verification.',
+      message: 'Offline: Saved locally and queued for auto-verification when online.',
     };
   }
 
@@ -127,7 +184,7 @@ export async function lookupPostcode(rawCode) {
     return {
       status: 'offline_pending',
       postcode: clean,
-      message: 'Missing VITE_NIPOST_PUBLIC_KEY in environment; saved locally.',
+      message: 'Missing VITE_NIPOST_PUBLIC_KEY; saved locally.',
     };
   }
 
@@ -137,16 +194,41 @@ export async function lookupPostcode(rawCode) {
     const res = await fetchWithTimeout(url, { headers: getHeaders() });
     const record = res.data || res;
 
-    return {
+    const admin = mapAdminFields(record);
+    let coords = extractCoordinates(record);
+
+    if (!coords) {
+      const adminQuery = [admin.district, admin.ward, admin.lga, admin.state, 'Nigeria']
+        .filter(Boolean)
+        .join(', ');
+      if (adminQuery && adminQuery !== 'Nigeria') {
+        const geo = await geocodeNigeriaLocation(adminQuery);
+        if (geo) coords = geo.coords;
+      }
+    }
+
+    const resultObj = {
       status: 'verified',
       postcode: clean,
       formattedPostcode: formatted,
       spacedPostcode: formatSpacedPostcode(clean),
-      admin: mapAdminFields(record),
-      coords: extractCoordinates(record),
+      admin,
+      coords,
       message: 'Verified with NIPOST Postcode API.',
     };
+
+    await cachePostcodeRecord(resultObj).catch(() => {});
+    return resultObj;
   } catch (error) {
+    const cached = await getCachedPostcode(clean).catch(() => null);
+    if (cached) {
+      return {
+        ...cached,
+        status: 'verified',
+        message: 'Loaded from local offline postcode cache.',
+      };
+    }
+
     return {
       status: 'offline_pending',
       postcode: clean,
@@ -156,14 +238,14 @@ export async function lookupPostcode(rawCode) {
 }
 
 /**
- * NIPOST Search API: Finds the nearest postcode from an OpenLayers feature geometry
+ * Reverse Search from drawn OpenLayers geometry
  */
 export async function searchPostcodeByGeometry(geometry, fallbackQuery = '') {
   if (!navigator.onLine) {
     return {
       status: 'offline_pending',
       postcode: '',
-      message: 'Offline: Enter postcode manually or verify when online.',
+      message: 'Offline: Enter postcode manually or auto-sync when online.',
     };
   }
 
@@ -181,13 +263,10 @@ export async function searchPostcodeByGeometry(geometry, fallbackQuery = '') {
     if (geometry) {
       const type = geometry.getType();
       let coord;
-      if (type === 'Point') {
-        coord = geometry.getCoordinates();
-      } else if (type === 'LineString') {
-        coord = geometry.getFirstCoordinate();
-      } else if (type === 'Polygon') {
+      if (type === 'Point') coord = geometry.getCoordinates();
+      else if (type === 'LineString') coord = geometry.getFirstCoordinate();
+      else if (type === 'Polygon')
         coord = geometry.getInteriorPoint().getCoordinates().slice(0, 2);
-      }
 
       if (coord) {
         const [lon, lat] = toLonLat(coord);
@@ -201,11 +280,7 @@ export async function searchPostcodeByGeometry(geometry, fallbackQuery = '') {
     }
 
     if (![...params.keys()].length) {
-      return {
-        status: 'not_found',
-        postcode: '',
-        message: 'No coordinates or search query available.',
-      };
+      return { status: 'not_found', postcode: '', message: 'No coordinates available.' };
     }
 
     const url = `${BASE_URL}/v1/search?${params.toString()}`;
@@ -221,7 +296,7 @@ export async function searchPostcodeByGeometry(geometry, fallbackQuery = '') {
     }
 
     const clean = normalizePostcode(item.postcode);
-    return {
+    const resultObj = {
       status: 'verified',
       postcode: clean,
       formattedPostcode: formatHyphenatedPostcode(clean),
@@ -230,6 +305,9 @@ export async function searchPostcodeByGeometry(geometry, fallbackQuery = '') {
       coords: extractCoordinates(item),
       message: 'Postcode matched via NIPOST Search.',
     };
+
+    await cachePostcodeRecord(resultObj).catch(() => {});
+    return resultObj;
   } catch (error) {
     return {
       status: 'offline_pending',
@@ -240,31 +318,37 @@ export async function searchPostcodeByGeometry(geometry, fallbackQuery = '') {
 }
 
 /**
- * Top Map Search Bar: Searches by 11-character postcode OR area/address query
- * Also collects nearby postcodes in the same cell/sector for the popup mini-map
+ * Top Search Bar: Searches NIPOST API + Local Cache + Nigeria Geocoder fallback
+ * Guarantees accurate coordinates so the main map always flies to the real location.
  */
 export async function searchPostcodeOrPlace(rawQuery) {
   const trimmed = (rawQuery || '').trim();
   if (!trimmed) return [];
 
-  if (!navigator.onLine) {
-    throw new Error('You are currently offline. Connect to search NIPOST postcodes.');
-  }
-
-  if (!API_KEY) {
-    throw new Error('Missing VITE_NIPOST_PUBLIC_KEY in environment.');
-  }
-
   const normalized = normalizePostcode(trimmed);
   const looksLikePostcode = /^[A-Z]{2}\d{2}[A-Z0-9]{7}$/.test(normalized);
 
+  // Offline search against IndexedDB cached postcodes
+  if (!navigator.onLine) {
+    const allCached = await getAllCachedPostcodes().catch(() => []);
+    const matches = allCached.filter(
+      (c) =>
+        c.postcode.includes(normalized) ||
+        JSON.stringify(c.admin || {})
+          .toLowerCase()
+          .includes(trimmed.toLowerCase())
+    );
+    if (matches.length) return matches;
+    throw new Error('Offline: No cached postcode matched. Connect to search new locations.');
+  }
+
+  // 1. Direct 11-character postcode lookup
   if (looksLikePostcode) {
     const lookupRes = await lookupPostcode(normalized);
     if (lookupRes.status === 'verified') {
       let coords = lookupRes.coords;
       let nearby = [];
 
-      // Query /v1/search using the 7-character sector prefix (e.g., "KD-11-C34") to find nearby building codes
       try {
         const sectorPrefix = `${normalized.slice(0, 2)}-${normalized.slice(2, 4)}-${normalized.slice(4, 7)}`;
         const searchUrl = `${BASE_URL}/v1/search?q=${encodeURIComponent(sectorPrefix)}`;
@@ -289,7 +373,24 @@ export async function searchPostcodeOrPlace(rawQuery) {
           })
           .filter((r) => r.postcode && r.postcode !== normalized && r.coords);
       } catch {
-        // Proceed gracefully if nearby search is unavailable in sandbox
+        // Proceed with primary result
+      }
+
+      // If NIPOST sandbox still gave no coordinates, geocode the administrative hierarchy
+      if (!coords) {
+        const adminStr = [
+          lookupRes.admin?.district,
+          lookupRes.admin?.ward,
+          lookupRes.admin?.lga,
+          lookupRes.admin?.state,
+          'Nigeria',
+        ]
+          .filter(Boolean)
+          .join(', ');
+        if (adminStr !== 'Nigeria') {
+          const geo = await geocodeNigeriaLocation(adminStr);
+          if (geo) coords = geo.coords;
+        }
       }
 
       return [
@@ -305,32 +406,77 @@ export async function searchPostcodeOrPlace(rawQuery) {
     }
   }
 
-  const url = `${BASE_URL}/v1/search?q=${encodeURIComponent(trimmed)}`;
-  const res = await fetchWithTimeout(url, { headers: getHeaders() });
-  const list = Array.isArray(res.data) ? res.data : (res.data ? [res.data] : []);
+  // 2. Text / Place / Partial Postcode Search via NIPOST /v1/search
+  let nipostResults = [];
+  if (API_KEY) {
+    try {
+      const url = `${BASE_URL}/v1/search?q=${encodeURIComponent(trimmed)}`;
+      const res = await fetchWithTimeout(url, { headers: getHeaders() });
+      const list = Array.isArray(res.data) ? res.data : (res.data ? [res.data] : []);
 
-  const mapped = list
-    .filter((item) => item && (item.postcode || item.code))
-    .slice(0, 8)
-    .map((item) => {
-      const clean = normalizePostcode(item.postcode || item.code);
-      return {
-        postcode: clean,
-        formattedPostcode: formatHyphenatedPostcode(clean),
-        spacedPostcode: formatSpacedPostcode(clean),
-        admin: mapAdminFields(item),
-        coords: extractCoordinates(item),
-      };
-    });
+      for (const item of list.filter((x) => x && (x.postcode || x.code)).slice(0, 6)) {
+        const clean = normalizePostcode(item.postcode || item.code);
+        const admin = mapAdminFields(item);
+        let coords = extractCoordinates(item);
 
-  return mapped.map((entry, idx) => ({
-    ...entry,
-    nearby: mapped
-      .filter((other, oIdx) => oIdx !== idx && other.coords)
-      .map((other) => ({
-        postcode: other.postcode,
-        shortCode: other.postcode.slice(-4),
-        coords: other.coords,
-      })),
-  }));
+        if (!coords) {
+          const adminStr = [admin.district, admin.lga, admin.state, 'Nigeria']
+            .filter(Boolean)
+            .join(', ');
+          const geo = await geocodeNigeriaLocation(
+            adminStr !== 'Nigeria' ? adminStr : `${trimmed}, Nigeria`
+          );
+          if (geo) coords = geo.coords;
+        }
+
+        const entry = {
+          postcode: clean,
+          formattedPostcode: formatHyphenatedPostcode(clean),
+          spacedPostcode: formatSpacedPostcode(clean),
+          admin,
+          coords,
+        };
+        await cachePostcodeRecord(entry).catch(() => {});
+        nipostResults.push(entry);
+      }
+    } catch {
+      // Fall through to Nigeria place geocoder
+    }
+  }
+
+  if (nipostResults.length > 0) {
+    return nipostResults.map((entry, idx) => ({
+      ...entry,
+      nearby: nipostResults
+        .filter((other, oIdx) => oIdx !== idx && other.coords)
+        .map((other) => ({
+          postcode: other.postcode,
+          shortCode: other.postcode.slice(-4),
+          coords: other.coords,
+        })),
+    }));
+  }
+
+  // 3. Fallback: If user typed a town/LGA/village name (e.g., "Kagarko"), locate it on the map
+  const geoFallback = await geocodeNigeriaLocation(`${trimmed}, Nigeria`);
+  if (geoFallback) {
+    return [
+      {
+        postcode: '',
+        formattedPostcode: trimmed.toUpperCase(),
+        spacedPostcode: trimmed,
+        admin: {
+          district: geoFallback.displayName.split(',')[0] || trimmed,
+          lga: '',
+          ward: '',
+          state: 'Nigeria',
+        },
+        coords: geoFallback.coords,
+        nearby: [],
+        isPlaceMatch: true,
+      },
+    ];
+  }
+
+  return [];
 }

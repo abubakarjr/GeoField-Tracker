@@ -23,6 +23,13 @@ import { setupUI } from './js/ui.js';
 import { loadLayerFromLocal, saveLayerToLocal } from './js/storage.js';
 import { setupExport } from './js/export.js';
 import { searchPostcodeOrPlace } from './js/postcode.js';
+import {
+  attachOfflineTileLoader,
+  downloadOfflineRegion,
+  cancelOfflineDownload,
+  getOfflineStorageSummary,
+  clearAllOfflineMapTiles,
+} from './js/offlineTiles.js';
 
 function showToast(message, variant = 'success') {
   const container = document.getElementById('toast-container');
@@ -54,7 +61,7 @@ function setupThemeToggle() {
     iconSun?.classList.toggle('hidden', !isDark);
     btn.title = isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode';
     if (metaTheme) {
-      metaTheme.setAttribute('content', isDark ? '#0f172a' : '#0f4c5c');
+      metaTheme.setAttribute('content', isDark ? '#0d1d22' : '#175d69');
     }
   }
 
@@ -91,14 +98,138 @@ function setupNetworkStatus() {
   sync();
 }
 
-function setupPostcodeMapSearch(mainMap, getVectorSource, uiManager) {
+function setupOfflineMapManager(mainMap) {
+  const openBtn = document.getElementById('btn-open-offline-mgr');
+  const panel = document.getElementById('offline-map-panel');
+  const closeBtn = document.getElementById('btn-close-offline-panel');
+  const statsBadge = document.getElementById('offline-storage-stats');
+
+  const nameInput = document.getElementById('offline-region-name');
+  const modeSelect = document.getElementById('offline-radius-mode');
+  const startBtn = document.getElementById('btn-start-offline-dl');
+  const cancelBtn = document.getElementById('btn-cancel-offline-dl');
+  const clearCacheBtn = document.getElementById('btn-clear-offline-tiles');
+
+  const progressBox = document.getElementById('offline-progress-box');
+  const progressText = document.getElementById('offline-progress-text');
+  const progressPct = document.getElementById('offline-progress-pct');
+  const progressFill = document.getElementById('offline-progress-fill');
+  const regionsList = document.getElementById('saved-regions-list');
+
+  async function refreshRegionsList() {
+    const { regions, cachedTileCount, quotaNote } = await getOfflineStorageSummary();
+    if (statsBadge) {
+      statsBadge.textContent = quotaNote
+        ? `${cachedTileCount} TILES • ${quotaNote}`
+        : `${cachedTileCount} TILES CACHED`;
+    }
+
+    if (!regions.length) {
+      regionsList.innerHTML =
+        '<div class="empty-regions">No offline map areas downloaded yet.</div>';
+      return;
+    }
+
+    regionsList.innerHTML = '';
+    regions
+      .slice()
+      .reverse()
+      .forEach((reg) => {
+        const card = document.createElement('div');
+        card.className = 'region-card';
+        const dateStr = new Date(reg.savedAt).toLocaleDateString();
+        card.innerHTML = `
+          <div>
+            <div class="region-title">${reg.label}</div>
+            <div class="region-meta">${reg.tileCount} tiles • Saved ${dateStr}</div>
+          </div>
+          <button type="button" class="region-fly-btn">Go to Area</button>
+        `;
+        card.querySelector('.region-fly-btn').addEventListener('click', () => {
+          mainMap.getView().animate({
+            center: fromLonLat(reg.center),
+            zoom: 14,
+            duration: 750,
+          });
+          panel.classList.add('hidden');
+        });
+        regionsList.appendChild(card);
+      });
+  }
+
+  openBtn?.addEventListener('click', async () => {
+    panel.classList.remove('hidden');
+    await refreshRegionsList();
+  });
+
+  closeBtn?.addEventListener('click', () => {
+    panel.classList.add('hidden');
+  });
+
+  cancelBtn?.addEventListener('click', () => {
+    cancelOfflineDownload();
+    progressBox.classList.add('hidden');
+    startBtn.disabled = false;
+    showToast('Offline map download cancelled', 'warning');
+  });
+
+  startBtn?.addEventListener('click', async () => {
+    const centerLonLat = toLonLat(mainMap.getView().getCenter());
+    const mode = modeSelect.value;
+    const label =
+      nameInput.value.trim() ||
+      `Field Zone (${centerLonLat[1].toFixed(3)}°N, ${centerLonLat[0].toFixed(3)}°E)`;
+
+    startBtn.disabled = true;
+    progressBox.classList.remove('hidden');
+    progressFill.style.width = '0%';
+    progressPct.textContent = '0%';
+    progressText.textContent = 'Starting tile download...';
+
+    try {
+      const outcome = await downloadOfflineRegion({
+        centerLonLat,
+        mode,
+        label,
+        onProgress: ({ completed, total, percent }) => {
+          progressFill.style.width = `${percent}%`;
+          progressPct.textContent = `${percent}%`;
+          progressText.textContent = `Cached ${completed} / ${total} tiles`;
+        },
+      });
+
+      if (!outcome.cancelled) {
+        showToast(`Saved "${label}" for offline field collection`, 'success');
+        nameInput.value = '';
+        await refreshRegionsList();
+      }
+    } catch (err) {
+      showToast(err.message || 'Offline download failed', 'warning');
+    } finally {
+      startBtn.disabled = false;
+      progressBox.classList.add('hidden');
+    }
+  });
+
+  clearCacheBtn?.addEventListener('click', async () => {
+    if (confirm('Delete all downloaded offline map tiles from this device?')) {
+      await clearAllOfflineMapTiles();
+      await refreshRegionsList();
+      showToast('Offline map cache cleared', 'warning');
+    }
+  });
+
+  return { refreshRegionsList };
+}
+
+function setupPostcodeMapSearch(mainMap, getVectorSource, uiManager, offlineMgr) {
   const searchInput = document.getElementById('map-search-input');
   const searchBtn = document.getElementById('btn-map-search');
   const clearBtn = document.getElementById('btn-clear-search');
   const dropdown = document.getElementById('search-results-dropdown');
 
-  // "Here is the postcode" Modal Card Elements
-  const modalBackdrop = document.getElementById('postcode-result-modal');
+  // Floating "Here is the postcode" Card Elements
+  const resultCard = document.getElementById('postcode-result-card');
   const popupClose = document.getElementById('popup-close');
   const popupPostcode = document.getElementById('popup-postcode');
   const popupAdmin = document.getElementById('popup-admin');
@@ -107,9 +238,10 @@ function setupPostcodeMapSearch(mainMap, getVectorSource, uiManager) {
   const directionsBtn = document.getElementById('btn-postcode-directions');
   const shareBtn = document.getElementById('btn-postcode-share');
   const popupSaveBtn = document.getElementById('popup-save-feature');
+  const popupDownload10kmBtn = document.getElementById('popup-download-10km');
   const miniMapLayerBtn = document.getElementById('btn-minimap-layer');
 
-  // Pin Layer on Main Map
+  // Pin Layer on Main Map (Deep Teal #175d69)
   const searchPinSource = new VectorSource();
   const searchPinLayer = new VectorLayer({
     source: searchPinSource,
@@ -118,35 +250,34 @@ function setupPostcodeMapSearch(mainMap, getVectorSource, uiManager) {
       new Style({
         image: new CircleStyle({
           radius: 10,
-          fill: new Fill({ color: '#eab308' }),
+          fill: new Fill({ color: '#175d69' }),
           stroke: new Stroke({ color: '#ffffff', width: 3 }),
         }),
         text: new Text({
           text: feature.get('label') || '',
           font: '800 12px system-ui, -apple-system, sans-serif',
-          fill: new Fill({ color: '#0f172a' }),
-          backgroundFill: new Fill({ color: '#fef08a' }),
-          backgroundStroke: new Stroke({ color: '#eab308', width: 1.5 }),
-          padding: [4, 8, 4, 8],
+          fill: new Fill({ color: '#ffffff' }),
+          backgroundFill: new Fill({ color: '#175d69' }),
+          backgroundStroke: new Stroke({ color: '#ffffff', width: 1.5 }),
+          padding: [5, 9, 5, 9],
           offsetY: -24,
         }),
       }),
   });
   mainMap.addLayer(searchPinLayer);
 
-  // Embedded Mini-Map inside the "Here is the postcode" Popup Card
-  const miniSatLayer = new TileLayer({
-    source: new XYZ({
-      url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-      crossOrigin: 'anonymous',
-    }),
-    visible: true,
+  // Embedded Mini-Map inside the "Here is the postcode" Card
+  const miniSatSource = new XYZ({
+    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+    crossOrigin: 'anonymous',
   });
+  attachOfflineTileLoader(miniSatSource);
 
-  const miniOsmLayer = new TileLayer({
-    source: new OSM(),
-    visible: false,
-  });
+  const miniOsmSource = new OSM();
+  attachOfflineTileLoader(miniOsmSource);
+
+  const miniSatLayer = new TileLayer({ source: miniSatSource, visible: true });
+  const miniOsmLayer = new TileLayer({ source: miniOsmSource, visible: false });
 
   const miniMarkerSource = new VectorSource();
   const miniMarkerLayer = new VectorLayer({
@@ -157,12 +288,12 @@ function setupPostcodeMapSearch(mainMap, getVectorSource, uiManager) {
       if (kind === 'radius') {
         return new Style({
           stroke: new Stroke({
-            color: 'rgba(45, 212, 191, 0.85)',
-            width: 1.5,
+            color: 'rgba(38, 166, 154, 0.9)',
+            width: 1.8,
             lineDash: [6, 6],
           }),
           fill: new Fill({
-            color: 'rgba(45, 212, 191, 0.06)',
+            color: 'rgba(23, 93, 105, 0.12)',
           }),
         });
       }
@@ -172,22 +303,21 @@ function setupPostcodeMapSearch(mainMap, getVectorSource, uiManager) {
           text: new Text({
             text: feature.get('shortCode') || '',
             font: '800 11.5px system-ui, -apple-system, sans-serif',
-            fill: new Fill({ color: '#0f172a' }),
-            backgroundFill: new Fill({ color: '#facc15' }),
+            fill: new Fill({ color: '#ffffff' }),
+            backgroundFill: new Fill({ color: '#175d69' }),
             backgroundStroke: new Stroke({ color: '#ffffff', width: 1.5 }),
             padding: [4, 8, 4, 8],
           }),
         });
       }
 
-      // Nearby white building pills (BY01, BY06, etc.)
       return new Style({
         text: new Text({
           text: feature.get('shortCode') || '',
           font: '700 10.5px system-ui, -apple-system, sans-serif',
-          fill: new Fill({ color: '#0f172a' }),
+          fill: new Fill({ color: '#0f292e' }),
           backgroundFill: new Fill({ color: 'rgba(255, 255, 255, 0.94)' }),
-          backgroundStroke: new Stroke({ color: 'rgba(15, 23, 42, 0.15)', width: 1 }),
+          backgroundStroke: new Stroke({ color: 'rgba(23, 93, 105, 0.25)', width: 1 }),
           padding: [3, 6, 3, 6],
         }),
       });
@@ -199,11 +329,10 @@ function setupPostcodeMapSearch(mainMap, getVectorSource, uiManager) {
     layers: [miniSatLayer, miniOsmLayer, miniMarkerLayer],
     view: new View({
       center: fromLonLat([7.489064, 9.058505]),
-      zoom: 17,
+      zoom: 16,
     }),
   });
 
-  // Yellow "Map" / "Satellite" toggle button inside the mini-map
   miniMapLayerBtn.addEventListener('click', () => {
     const showOsm = miniSatLayer.getVisible();
     miniSatLayer.setVisible(!showOsm);
@@ -215,16 +344,13 @@ function setupPostcodeMapSearch(mainMap, getVectorSource, uiManager) {
   let activeMapCoord = null;
   let activeLatLng = null;
 
-  function closeModal() {
-    modalBackdrop.classList.add('hidden');
+  function closeCard() {
+    resultCard.classList.add('hidden');
   }
 
-  popupClose.addEventListener('click', closeModal);
-  modalBackdrop.addEventListener('click', (e) => {
-    if (e.target === modalBackdrop) closeModal();
-  });
+  popupClose.addEventListener('click', closeCard);
 
-  function showResultCard(item) {
+  function showResultOnMap(item) {
     dropdown.classList.add('hidden');
     activeSearchResult = item;
 
@@ -245,13 +371,13 @@ function setupPostcodeMapSearch(mainMap, getVectorSource, uiManager) {
       const [cLon, cLat] = toLonLat(mapCoord);
       lat = cLat;
       lng = cLon;
-      coordNote = `${lat.toFixed(5)}°, ${lng.toFixed(5)}° (Map Center)`;
+      coordNote = `${lat.toFixed(5)}°, ${lng.toFixed(5)}° (Unmapped Sandbox Code)`;
     }
 
     activeMapCoord = mapCoord;
     activeLatLng = { lat, lng };
 
-    // 1. Place pin on main map
+    // 1. Place pin directly on the main map and fly to actual coordinates
     searchPinSource.clear();
     searchPinSource.addFeature(
       new Feature({
@@ -261,11 +387,11 @@ function setupPostcodeMapSearch(mainMap, getVectorSource, uiManager) {
     );
     mainMap.getView().animate({
       center: mapCoord,
-      zoom: item.coords ? 17 : Math.max(mainMap.getView().getZoom(), 14),
-      duration: 800,
+      zoom: item.coords ? 16 : Math.max(mainMap.getView().getZoom(), 14),
+      duration: 850,
     });
 
-    // 2. Populate "Here is the postcode" card details
+    // 2. Populate floating "Here is the postcode" card
     const adminParts = [
       item.admin?.district,
       item.admin?.lga,
@@ -278,7 +404,7 @@ function setupPostcodeMapSearch(mainMap, getVectorSource, uiManager) {
       : 'Verified NIPOST Postcode';
     popupCoords.textContent = coordNote;
 
-    // 3. Populate Mini-Map features (dashed search ring, yellow primary badge, white nearby badges)
+    // 3. Populate Mini-Map preview
     miniMarkerSource.clear();
     miniMarkerSource.addFeature(
       new Feature({
@@ -304,41 +430,40 @@ function setupPostcodeMapSearch(mainMap, getVectorSource, uiManager) {
       new Feature({
         geometry: new Point(mapCoord),
         kind: 'primary',
-        shortCode: item.postcode.slice(-4),
+        shortCode: item.postcode ? item.postcode.slice(-4) : 'PIN',
       })
     );
 
-    // 4. Open modal & resize OpenLayers mini-map canvas
-    modalBackdrop.classList.remove('hidden');
+    resultCard.classList.remove('hidden');
     setTimeout(() => {
       miniMap.updateSize();
       miniMap.getView().setCenter(mapCoord);
-      miniMap.getView().setZoom(17);
-    }, 35);
+      miniMap.getView().setZoom(16);
+    }, 40);
   }
 
-  // Copy Postcode button
+  // Copy Postcode
   copyBtn.addEventListener('click', async () => {
     if (!activeSearchResult) return;
     try {
       await navigator.clipboard.writeText(activeSearchResult.spacedPostcode);
-      showToast(`Copied "${activeSearchResult.spacedPostcode}" to clipboard`, 'success');
+      showToast(`Copied "${activeSearchResult.spacedPostcode}"`, 'success');
     } catch {
       showToast(`Postcode: ${activeSearchResult.spacedPostcode}`, 'success');
     }
   });
 
-  // Directions button
+  // Directions
   directionsBtn.addEventListener('click', () => {
     if (!activeLatLng) return;
     const url = `https://www.google.com/maps/dir/?api=1&destination=${activeLatLng.lat},${activeLatLng.lng}`;
     window.open(url, '_blank', 'noopener,noreferrer');
   });
 
-  // Share button
+  // Share
   shareBtn.addEventListener('click', async () => {
     if (!activeSearchResult) return;
-    const shareText = `NIPOST Postcode: ${activeSearchResult.spacedPostcode} (${popupAdmin.textContent}) — Located via GeoField Tracker`;
+    const shareText = `NIPOST Postcode: ${activeSearchResult.spacedPostcode} (${popupAdmin.textContent}) — GeoField Tracker`;
     if (navigator.share) {
       try {
         await navigator.share({
@@ -348,18 +473,18 @@ function setupPostcodeMapSearch(mainMap, getVectorSource, uiManager) {
         });
         return;
       } catch {
-        // User cancelled share sheet; fall back to copy
+        // Fallback to copy
       }
     }
     try {
       await navigator.clipboard.writeText(shareText);
-      showToast('Postcode location copied for sharing', 'success');
+      showToast('Location details copied for sharing', 'success');
     } catch {
       showToast(shareText, 'success');
     }
   });
 
-  // "+ Save Pin to Field Data" button
+  // Save Pin to Field Data
   popupSaveBtn.addEventListener('click', async () => {
     if (!activeSearchResult || !activeMapCoord) return;
     const source = getVectorSource();
@@ -374,9 +499,9 @@ function setupPostcodeMapSearch(mainMap, getVectorSource, uiManager) {
         activeSearchResult.admin?.district ||
         `Site ${activeSearchResult.spacedPostcode}`,
       type: 'utilities',
-      description: `Located via NIPOST Postcode Search (${activeSearchResult.spacedPostcode})`,
-      postcode: activeSearchResult.postcode,
-      postcodeStatus: 'verified',
+      description: `Located via GeoField Search (${activeSearchResult.spacedPostcode})`,
+      postcode: activeSearchResult.postcode || '',
+      postcodeStatus: activeSearchResult.postcode ? 'verified' : 'unverified',
       state: activeSearchResult.admin?.state || '',
       lga: activeSearchResult.admin?.lga || '',
       ward: activeSearchResult.admin?.ward || '',
@@ -386,11 +511,39 @@ function setupPostcodeMapSearch(mainMap, getVectorSource, uiManager) {
 
     source.addFeature(newFeature);
     await saveLayerToLocal(source);
-    closeModal();
-    showToast(`Added ${activeSearchResult.spacedPostcode} to field features`, 'success');
+    closeCard();
+    showToast(`Saved ${activeSearchResult.spacedPostcode} to field data`, 'success');
 
     if (uiManager?.openMetadataPanel) {
       uiManager.openMetadataPanel(newFeature);
+    }
+  });
+
+  // Pre-visit 10km Offline Map Download right from Searched Location
+  popupDownload10kmBtn.addEventListener('click', async () => {
+    if (!activeLatLng) return;
+    const label = `${activeSearchResult?.spacedPostcode || 'Searched Area'} (10km)`;
+    popupDownload10kmBtn.disabled = true;
+    popupDownload10kmBtn.textContent = 'Downloading...';
+
+    try {
+      const outcome = await downloadOfflineRegion({
+        centerLonLat: [activeLatLng.lng, activeLatLng.lat],
+        mode: 'smart10km',
+        label,
+        onProgress: ({ percent }) => {
+          popupDownload10kmBtn.textContent = `Caching ${percent}%`;
+        },
+      });
+      if (!outcome.cancelled) {
+        showToast(`10km offline map saved for ${label}`, 'success');
+        await offlineMgr?.refreshRegionsList();
+      }
+    } catch (err) {
+      showToast(err.message || 'Download failed', 'warning');
+    } finally {
+      popupDownload10kmBtn.disabled = false;
+      popupDownload10kmBtn.textContent = '↓ 10km Offline';
     }
   });
 
@@ -407,13 +560,13 @@ function setupPostcodeMapSearch(mainMap, getVectorSource, uiManager) {
 
       if (!results.length) {
         dropdown.innerHTML =
-          '<div class="search-result-item"><span class="search-result-sub">No matching NIPOST postcode found. Try FC01A01KP27.</span></div>';
+          '<div class="search-result-item"><span class="search-result-sub">No matching postcode or location found. Try FC01A01KP27 or a town name.</span></div>';
         dropdown.classList.remove('hidden');
         return;
       }
 
       if (results.length === 1) {
-        showResultCard(results[0]);
+        showResultOnMap(results[0]);
         return;
       }
 
@@ -429,9 +582,9 @@ function setupPostcodeMapSearch(mainMap, getVectorSource, uiManager) {
             <div class="search-result-code">${item.spacedPostcode}</div>
             <div class="search-result-sub">${loc || 'NIPOST Verified Postcode'}</div>
           </div>
-          <span class="search-result-tag">Open Card</span>
+          <span class="search-result-tag">Locate</span>
         `;
-        row.addEventListener('click', () => showResultCard(item));
+        row.addEventListener('click', () => showResultOnMap(item));
         dropdown.appendChild(row);
       });
 
@@ -464,7 +617,7 @@ function setupPostcodeMapSearch(mainMap, getVectorSource, uiManager) {
     clearBtn.classList.add('hidden');
     dropdown.classList.add('hidden');
     searchPinSource.clear();
-    closeModal();
+    closeCard();
   });
 }
 
@@ -472,7 +625,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   setupThemeToggle();
   setupNetworkStatus();
 
-  // 1. Initialize Map (OSM & Satellite layers)
+  // 1. Initialize Map (OSM & Satellite with offline tile caching)
   const map = initializeMap('map');
 
   // 2. Wire up the Basemap Toggle Button
@@ -491,28 +644,63 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   }
 
-  // 3. Setup Live Geolocation
-  setupGeolocation(map);
+  // 3. Setup Offline Map Manager Drawer
+  const offlineMgr = setupOfflineMapManager(map);
 
-  // 4. Declare vectorSource FIRST so UI and Search can reference it
+  // 4. Setup Live Geolocation + Automatic 10km Radius Offline Map Download
+  const autoPill = document.getElementById('auto-cache-pill');
+  const autoText = document.getElementById('auto-cache-text');
+
+  setupGeolocation(map, {
+    onGpsFix: async (lonLat) => {
+      if (!navigator.onLine) return;
+      autoPill?.classList.remove('hidden');
+      if (autoText) autoText.textContent = 'Caching 10km offline map: 0%';
+
+      try {
+        const label = `Live GPS 10km (${lonLat[1].toFixed(3)}°N, ${lonLat[0].toFixed(3)}°E)`;
+        const outcome = await downloadOfflineRegion({
+          centerLonLat: lonLat,
+          mode: 'smart10km',
+          label,
+          onProgress: ({ percent }) => {
+            if (autoText) {
+              autoText.textContent = `Caching 10km offline map: ${percent}%`;
+            }
+          },
+        });
+        if (!outcome.cancelled) {
+          showToast('10km radius around your live location is now saved offline', 'success');
+          await offlineMgr.refreshRegionsList();
+        }
+      } catch {
+        // Silent fail if tile server rate-limits
+      } finally {
+        autoPill?.classList.add('hidden');
+      }
+    },
+  });
+
+  // 5. Declare vectorSource FIRST so UI and Search can reference it
   let vectorSource;
 
-  // 5. Setup UI Drawer
+  // 6. Setup UI Drawer
   const uiManager = setupUI(() => vectorSource, showToast);
 
-  // 6. Setup Drawing & Map Postcode Labels
-  vectorSource = setupDrawing(map, uiManager);
+  // 7. Setup Drawing & Map Postcode Labels
+  vectorSource = setupDrawing(map, uiManager, showToast);
 
-  // 7. Setup Interactive "Here is the postcode" Search Modal
-  setupPostcodeMapSearch(map, () => vectorSource, uiManager);
+  // 8. Setup Interactive Postcode Search & Floating Result Card
+  setupPostcodeMapSearch(map, () => vectorSource, uiManager, offlineMgr);
 
-  // 8. Load Offline Data (IndexedDB)
+  // 9. Load Offline Data (IndexedDB) & sync any pending offline postcodes if online
   await loadLayerFromLocal(vectorSource);
+  await uiManager.syncPendingPostcodes();
 
-  // 9. Setup Export Engine (GeoJSON & CSV with Postcode columns)
+  // 10. Setup Export Engine (GeoJSON & CSV with Postcode columns)
   setupExport(vectorSource, showToast);
 
-  // 10. Register Service Worker (PWA Offline Support)
+  // 11. Register Service Worker (PWA Offline Support)
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
       navigator.serviceWorker

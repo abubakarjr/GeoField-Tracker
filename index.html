@@ -11,8 +11,8 @@
       name="apple-mobile-web-app-status-bar-style"
       content="black-translucent"
     />
-    <meta id="meta-theme-color" name="theme-color" content="#0f4c5c" />
-    <title>GeoField Tracker — Spatial Intelligence & NIPOST GIS</title>
+    <meta id="meta-theme-color" name="theme-color" content="#175d69" />
+    <title>GeoField Tracker — Offline Spatial Intelligence & NIPOST GIS</title>
     <link rel="stylesheet" href="/src/style.css" />
     <link rel="manifest" href="/manifest.json" />
     <link rel="apple-touch-icon" href="/icons/icon-192x192.png" />
@@ -20,7 +20,7 @@
   </head>
   <body>
     <div id="app-container">
-      <!-- Top Floating HUD: Brand, Status, Theme Switcher & NIPOST Search -->
+      <!-- Top Floating HUD: Brand, Offline Status, Theme Toggle & NIPOST Search -->
       <header class="top-hud">
         <div class="brand-pill">
           <div class="brand-title">
@@ -50,15 +50,38 @@
             </span>
             <span id="feature-count" class="count-pill">0 Features</span>
 
-            <!-- Light / Dark Mode Switcher -->
+            <!-- Open Offline Map Manager Button -->
+            <button
+              type="button"
+              id="btn-open-offline-mgr"
+              class="hud-icon-btn"
+              aria-label="Offline Map Manager"
+              title="Download & Manage Offline Maps"
+            >
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2.2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                <polyline points="7 10 12 15 17 10"></polyline>
+                <line x1="12" y1="15" x2="12" y2="3"></line>
+              </svg>
+            </button>
+
+            <!-- Light / Dark Theme Switcher -->
             <button
               type="button"
               id="btn-toggle-theme"
-              class="theme-toggle-btn"
+              class="hud-icon-btn"
               aria-label="Toggle Light and Dark Theme"
               title="Switch to Dark Mode"
             >
-              <!-- Moon icon (shown in Light Mode) -->
               <svg
                 class="icon-moon"
                 width="16"
@@ -72,7 +95,6 @@
               >
                 <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"></path>
               </svg>
-              <!-- Sun icon (shown in Dark Mode) -->
               <svg
                 class="icon-sun hidden"
                 width="16"
@@ -117,7 +139,7 @@
             <input
               type="text"
               id="map-search-input"
-              placeholder="Search postcode (e.g. KD 11 C34 BY 16) or area..."
+              placeholder="Search postcode (e.g. KD 11 C34 BY 16) or place..."
               autocomplete="off"
             />
             <button
@@ -138,6 +160,12 @@
           ></div>
         </div>
       </header>
+
+      <!-- Background 10km Auto-Download Progress Pill -->
+      <div id="auto-cache-pill" class="auto-cache-pill hidden">
+        <span class="pulse-dot"></span>
+        <span id="auto-cache-text">Caching 10km offline map: 0%</span>
+      </div>
 
       <!-- Live Measurement Banner -->
       <div id="measure-display" class="measure-display hidden">
@@ -304,79 +332,50 @@
         </div>
       </div>
 
-      <!-- NIPOST "Here is the postcode" Result Popup Card -->
-      <div
-        id="postcode-result-modal"
-        class="postcode-modal-backdrop hidden"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="postcode-modal-heading"
+      <!-- Non-Blocking Floating "Here is the postcode" Card over Live Map -->
+      <section
+        id="postcode-result-card"
+        class="postcode-floating-card hidden"
+        aria-label="Searched Postcode Details"
       >
-        <div class="postcode-result-card">
-          <div class="postcode-card-top">
-            <h2 id="postcode-modal-heading">Here is the postcode</h2>
+        <div class="postcode-card-top">
+          <h2>Here is the postcode</h2>
+          <button
+            type="button"
+            id="popup-close"
+            class="postcode-card-close"
+            aria-label="Close postcode card"
+          >
+            ×
+          </button>
+        </div>
+
+        <div class="postcode-card-grid">
+          <!-- Left: Embedded Satellite / Map Preview with Nearby Postcode Badges -->
+          <div class="postcode-minimap-box">
+            <div id="popup-mini-map" class="popup-mini-map"></div>
             <button
               type="button"
-              id="popup-close"
-              class="postcode-card-close"
-              aria-label="Close postcode card"
+              id="btn-minimap-layer"
+              class="minimap-layer-pill"
             >
-              ×
+              Map
             </button>
           </div>
 
-          <div class="postcode-card-grid">
-            <!-- Left Column: Embedded Satellite / Map Preview with Postcode Badges -->
-            <div class="postcode-minimap-box">
-              <div id="popup-mini-map" class="popup-mini-map"></div>
+          <!-- Right: Brand Teal Postcode Pill, Copy, Location, Directions, Share & Offline Download -->
+          <div class="postcode-info-col">
+            <div class="postcode-code-row">
+              <div id="popup-postcode" class="postcode-brand-pill">
+                KD 11 C34 BY 16
+              </div>
               <button
                 type="button"
-                id="btn-minimap-layer"
-                class="minimap-layer-pill"
+                id="btn-copy-postcode"
+                class="postcode-copy-btn"
+                title="Copy Postcode"
+                aria-label="Copy Postcode"
               >
-                Map
-              </button>
-            </div>
-
-            <!-- Right Column: Spaced Postcode Pill, Copy, Location, Directions & Share -->
-            <div class="postcode-info-col">
-              <div class="postcode-code-row">
-                <div id="popup-postcode" class="postcode-gold-pill">
-                  KD 11 C34 BY 16
-                </div>
-                <button
-                  type="button"
-                  id="btn-copy-postcode"
-                  class="postcode-copy-btn"
-                  title="Copy Postcode"
-                  aria-label="Copy Postcode"
-                >
-                  <svg
-                    width="18"
-                    height="18"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                  >
-                    <rect
-                      width="14"
-                      height="14"
-                      x="8"
-                      y="8"
-                      rx="2"
-                      ry="2"
-                    ></rect>
-                    <path
-                      d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"
-                    ></path>
-                  </svg>
-                </button>
-              </div>
-
-              <div class="postcode-location-line">
                 <svg
                   width="17"
                   height="17"
@@ -387,79 +386,105 @@
                   stroke-linecap="round"
                   stroke-linejoin="round"
                 >
+                  <rect width="14" height="14" x="8" y="8" rx="2" ry="2"></rect>
                   <path
-                    d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"
+                    d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"
                   ></path>
-                  <circle cx="12" cy="10" r="3"></circle>
                 </svg>
-                <span id="popup-admin">Kagarko, Kaduna</span>
-              </div>
+              </button>
+            </div>
 
-              <div id="popup-coords" class="postcode-coords-sub">
-                9.05850° N, 7.48906° E
-              </div>
+            <div class="postcode-location-line">
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"></path>
+                <circle cx="12" cy="10" r="3"></circle>
+              </svg>
+              <span id="popup-admin">Kagarko, Kaduna</span>
+            </div>
 
-              <div class="postcode-pill-actions">
-                <button
-                  type="button"
-                  id="btn-postcode-directions"
-                  class="pill-outline-btn"
+            <div id="popup-coords" class="postcode-coords-sub">
+              9.05850° N, 7.48906° E
+            </div>
+
+            <div class="postcode-pill-actions">
+              <button
+                type="button"
+                id="btn-postcode-directions"
+                class="pill-outline-btn"
+              >
+                <svg
+                  width="15"
+                  height="15"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2.1"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
                 >
-                  <svg
-                    width="16"
-                    height="16"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2.1"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                  >
-                    <polygon points="3 11 22 2 13 21 11 13 3 11"></polygon>
-                  </svg>
-                  <span>Directions</span>
-                </button>
-                <button
-                  type="button"
-                  id="btn-postcode-share"
-                  class="pill-outline-btn"
+                  <polygon points="3 11 22 2 13 21 11 13 3 11"></polygon>
+                </svg>
+                <span>Directions</span>
+              </button>
+              <button
+                type="button"
+                id="btn-postcode-share"
+                class="pill-outline-btn"
+              >
+                <svg
+                  width="15"
+                  height="15"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2.1"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
                 >
-                  <svg
-                    width="16"
-                    height="16"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2.1"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                  >
-                    <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"></path>
-                    <polyline points="16 6 12 2 8 6"></polyline>
-                    <line x1="12" y1="2" x2="12" y2="15"></line>
-                  </svg>
-                  <span>Share</span>
-                </button>
-              </div>
+                  <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"></path>
+                  <polyline points="16 6 12 2 8 6"></polyline>
+                  <line x1="12" y1="2" x2="12" y2="15"></line>
+                </svg>
+                <span>Share</span>
+              </button>
+            </div>
 
+            <div class="postcode-bottom-ctas">
               <button
                 type="button"
                 id="popup-save-feature"
                 class="popup-save-field-btn"
               >
-                + Save Pin to Field Data
+                + Save Pin
+              </button>
+              <button
+                type="button"
+                id="popup-download-10km"
+                class="popup-offline-btn"
+                title="Download 10km offline map around this location"
+              >
+                ↓ 10km Offline
               </button>
             </div>
           </div>
         </div>
-      </div>
+      </section>
 
       <!-- Bottom-Left Live Coordinate Status Bar -->
       <div id="coord-readout" class="coord-readout">
         9.05851° N, 7.48906° E • EPSG:4326
       </div>
 
-      <!-- Bottom-Right Basemap & GPS Controls -->
+      <!-- Bottom-Right Basemap & Live GPS Controls -->
       <nav class="bottom-toolbar" aria-label="Map Navigation Controls">
         <button
           type="button"
@@ -487,8 +512,8 @@
           type="button"
           id="btn-locate"
           class="tool-btn"
-          aria-label="Live GPS Tracking"
-          title="Live GPS Location"
+          aria-label="Live GPS Tracking & 10km Auto-Download"
+          title="Live GPS Location (Auto-caches 10km Offline Map)"
         >
           <svg
             width="20"
@@ -508,6 +533,110 @@
           </svg>
         </button>
       </nav>
+
+      <!-- Slide-Over Offline Map Manager Drawer -->
+      <aside
+        id="offline-map-panel"
+        class="side-panel hidden"
+        aria-label="Offline Map Manager"
+      >
+        <div class="panel-header">
+          <div>
+            <h3>Offline Map Storage</h3>
+            <span id="offline-storage-stats" class="geom-badge"
+              >0 TILES CACHED</span
+            >
+          </div>
+          <button
+            type="button"
+            id="btn-close-offline-panel"
+            class="close-btn"
+            aria-label="Close"
+          >
+            ×
+          </button>
+        </div>
+
+        <div class="panel-body">
+          <div class="offline-info-banner">
+            Download field areas before traveling to low-signal zones. GeoField
+            caches map tiles, NIPOST postcodes, and drawn features locally on
+            your device.
+          </div>
+
+          <div class="field-group">
+            <label for="offline-region-name">Location / Mission Label</label>
+            <input
+              type="text"
+              id="offline-region-name"
+              placeholder="e.g., Kagarko Ward Survey or Tafa Field Site"
+            />
+          </div>
+
+          <div class="field-group">
+            <label for="offline-radius-mode"
+              >Coverage Radius & Zoom Detail</label
+            >
+            <select id="offline-radius-mode">
+              <option value="smart10km">
+                10 km Radius — Smart Field Pack (~215 tiles • ~4.5 MB)
+              </option>
+              <option value="full10km">
+                10 km Radius — Full Street Detail z12–z16 (~680 tiles • ~14 MB)
+              </option>
+              <option value="detail5km">
+                5 km Radius — High Precision z12–z17 (~650 tiles • ~13 MB)
+              </option>
+            </select>
+          </div>
+
+          <div id="offline-progress-box" class="offline-progress-box hidden">
+            <div class="progress-label-row">
+              <span id="offline-progress-text">Preparing tiles...</span>
+              <span id="offline-progress-pct">0%</span>
+            </div>
+            <div class="progress-track">
+              <div
+                id="offline-progress-fill"
+                class="progress-fill"
+                style="width: 0%"
+              ></div>
+            </div>
+            <button
+              type="button"
+              id="btn-cancel-offline-dl"
+              class="cancel-dl-btn"
+            >
+              Cancel Download
+            </button>
+          </div>
+
+          <button
+            type="button"
+            id="btn-start-offline-dl"
+            class="primary-save-btn"
+          >
+            Download Current Map Area Offline
+          </button>
+
+          <div class="saved-regions-header">
+            <span>Saved Offline Locations</span>
+            <button
+              type="button"
+              id="btn-clear-offline-tiles"
+              class="text-danger-btn"
+            >
+              Clear Cache
+            </button>
+          </div>
+
+          <div id="saved-regions-list" class="saved-regions-list">
+            <div class="empty-regions">
+              No offline map areas downloaded yet.
+            </div>
+          </div>
+        </div>
+      </aside>
 
       <!-- Slide-Over Attribute & Postcode Drawer -->
       <aside
@@ -622,6 +751,14 @@
 
           <button type="button" id="btn-save-meta" class="primary-save-btn">
             Save Feature & Postcode
+          </button>
+
+          <button
+            type="button"
+            id="btn-delete-feature"
+            class="delete-feature-btn"
+          >
+            Delete This Feature
           </button>
         </div>
       </aside>
