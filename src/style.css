@@ -2,16 +2,53 @@
   --primary: #0f4c5c;
   --primary-hover: #0a3642;
   --accent: #0d9488;
+  --gold-btn: #eab308;
+  --gold-btn-hover: #ca8a04;
+  --gold-pill-border: #eab308;
+  --gold-pill-text: #ca8a04;
+  --gold-pill-bg: #fefce8;
+
   --surface: rgba(255, 255, 255, 0.94);
   --surface-solid: #ffffff;
+  --surface-subtle: #f8fafc;
+  --surface-hover: #f1f5f9;
+  --input-bg: #ffffff;
   --border: rgba(15, 23, 42, 0.12);
+  --border-strong: #cbd5e1;
   --text-main: #0f172a;
   --text-muted: #475569;
+
   --shadow-sm: 0 2px 8px rgba(15, 23, 42, 0.08);
   --shadow-md: 0 8px 24px rgba(15, 23, 42, 0.14);
-  --shadow-lg: 0 14px 36px rgba(15, 23, 42, 0.18);
+  --shadow-lg: 0 18px 44px rgba(15, 23, 42, 0.22);
   --radius-md: 12px;
-  --radius-lg: 16px;
+  --radius-lg: 18px;
+}
+
+/* Dark Theme Overrides */
+[data-theme="dark"] {
+  --primary: #14b8a6;
+  --primary-hover: #0d9488;
+  --accent: #2dd4bf;
+  --gold-btn: #eab308;
+  --gold-btn-hover: #facc15;
+  --gold-pill-border: #facc15;
+  --gold-pill-text: #facc15;
+  --gold-pill-bg: rgba(250, 204, 21, 0.12);
+
+  --surface: rgba(15, 23, 42, 0.92);
+  --surface-solid: #0f172a;
+  --surface-subtle: #1e293b;
+  --surface-hover: #334155;
+  --input-bg: #1e293b;
+  --border: rgba(148, 163, 184, 0.18);
+  --border-strong: #334155;
+  --text-main: #f8fafc;
+  --text-muted: #94a3b8;
+
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.35);
+  --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.45);
+  --shadow-lg: 0 20px 50px rgba(0, 0, 0, 0.65);
 }
 
 * {
@@ -34,7 +71,7 @@ html {
     Roboto,
     sans-serif;
   color: var(--text-main);
-  background: #e2e8f0;
+  background: var(--surface-subtle);
 }
 
 #app-container {
@@ -51,7 +88,7 @@ html {
   height: 100%;
 }
 
-/* Push OpenLayers default zoom buttons below the top HUD */
+/* OpenLayers Controls */
 .ol-zoom {
   top: auto !important;
   bottom: 132px !important;
@@ -75,14 +112,14 @@ html {
 }
 
 .ol-zoom button:hover {
-  background: #f8fafc !important;
+  background: var(--surface-hover) !important;
   color: var(--primary) !important;
 }
 
 .ol-scale-line {
   bottom: 34px !important;
   left: 14px !important;
-  background: rgba(15, 23, 42, 0.72) !important;
+  background: rgba(15, 23, 42, 0.78) !important;
   border-radius: 6px !important;
   padding: 3px 6px !important;
 }
@@ -112,8 +149,8 @@ html {
   align-items: center;
   gap: 12px;
   background: var(--surface);
-  -webkit-backdrop-filter: blur(12px);
-  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   padding: 8px 14px;
@@ -134,7 +171,7 @@ html {
 .hud-badges {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 7px;
 }
 
 .status-pill {
@@ -162,6 +199,11 @@ html {
   background: #16a34a;
 }
 
+[data-theme="dark"] .status-pill.online {
+  background: rgba(22, 163, 74, 0.2);
+  color: #4ade80;
+}
+
 .status-pill.offline {
   background: #fef3c7;
   color: #92400e;
@@ -171,33 +213,69 @@ html {
   background: #d97706;
 }
 
+[data-theme="dark"] .status-pill.offline {
+  background: rgba(217, 119, 6, 0.22);
+  color: #fbbf24;
+}
+
 .count-pill {
   font-size: 11.5px;
   font-weight: 600;
-  background: #f1f5f9;
+  background: var(--surface-subtle);
   color: var(--text-muted);
   padding: 3px 9px;
   border-radius: 999px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--border);
+}
+
+/* Light / Dark Theme Toggle Button */
+.theme-toggle-btn {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  background: var(--surface-subtle);
+  color: var(--text-main);
+  border: 1px solid var(--border);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition:
+    background 0.15s,
+    color 0.15s,
+    transform 0.15s;
+}
+
+.theme-toggle-btn:hover {
+  background: var(--surface-hover);
+  color: var(--primary);
+}
+
+.theme-toggle-btn:active {
+  transform: scale(0.92);
+}
+
+.theme-toggle-btn .hidden {
+  display: none;
 }
 
 /* Floating Postcode & Location Search Bar */
 .search-wrapper {
   position: relative;
   flex: 1;
-  max-width: 460px;
-  min-width: 270px;
+  max-width: 500px;
+  min-width: 280px;
 }
 
 .search-bar {
   display: flex;
   align-items: center;
   background: var(--surface);
-  -webkit-backdrop-filter: blur(12px);
-  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
   border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  padding: 4px 6px 4px 12px;
+  border-radius: 999px;
+  padding: 4px 6px 4px 14px;
   height: 46px;
   box-shadow: var(--shadow-md);
   transition:
@@ -206,9 +284,9 @@ html {
 }
 
 .search-bar:focus-within {
-  border-color: var(--primary);
+  border-color: var(--gold-btn);
   box-shadow:
-    0 0 0 3px rgba(15, 76, 92, 0.16),
+    0 0 0 3px rgba(234, 179, 8, 0.22),
     var(--shadow-md);
 }
 
@@ -221,17 +299,21 @@ html {
   flex: 1;
   border: none;
   background: transparent;
-  padding: 6px 8px;
+  padding: 6px 10px;
   font-size: 14px;
   color: var(--text-main);
   outline: none;
   min-width: 0;
 }
 
+.search-bar input::placeholder {
+  color: var(--text-muted);
+}
+
 .icon-clear {
   background: transparent;
   border: none;
-  color: #94a3b8;
+  color: var(--text-muted);
   font-size: 20px;
   line-height: 1;
   padding: 0 6px;
@@ -243,19 +325,20 @@ html {
 }
 
 .search-submit-btn {
-  background: var(--primary);
-  color: #ffffff;
+  background: var(--gold-btn);
+  color: #0f172a;
   border: none;
-  border-radius: 8px;
-  padding: 7px 13px;
+  border-radius: 999px;
+  padding: 8px 16px;
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 700;
   cursor: pointer;
+  white-space: nowrap;
   transition: background 0.15s;
 }
 
 .search-submit-btn:hover {
-  background: var(--primary-hover);
+  background: var(--gold-btn-hover);
 }
 
 .search-submit-btn:disabled {
@@ -282,8 +365,8 @@ html {
 }
 
 .search-result-item {
-  padding: 10px 14px;
-  border-bottom: 1px solid #f1f5f9;
+  padding: 11px 16px;
+  border-bottom: 1px solid var(--border);
   cursor: pointer;
   display: flex;
   justify-content: space-between;
@@ -297,13 +380,13 @@ html {
 }
 
 .search-result-item:hover {
-  background: #f0f9ff;
+  background: var(--surface-hover);
 }
 
 .search-result-code {
   font-weight: 700;
-  font-size: 13.5px;
-  color: var(--primary);
+  font-size: 14px;
+  color: var(--text-main);
 }
 
 .search-result-sub {
@@ -314,99 +397,288 @@ html {
 
 .search-result-tag {
   font-size: 11px;
-  font-weight: 600;
-  background: #ccfbf1;
-  color: #115e59;
-  padding: 3px 7px;
-  border-radius: 6px;
+  font-weight: 700;
+  background: var(--gold-pill-bg);
+  color: var(--gold-pill-text);
+  border: 1px solid var(--gold-pill-border);
+  padding: 3px 9px;
+  border-radius: 999px;
   white-space: nowrap;
 }
 
-/* OpenLayers Map Postcode Callout Popup */
-.ol-popup {
+/* =========================================================
+   NIPOST "Here is the postcode" Result Popup Card
+   ========================================================= */
+.postcode-modal-backdrop {
   position: absolute;
-  background: var(--surface-solid);
-  border-radius: 14px;
-  border: 1px solid rgba(15, 76, 92, 0.22);
-  box-shadow: var(--shadow-lg);
-  padding: 14px 16px;
-  min-width: 245px;
-  max-width: 290px;
-  transform: translate(-50%, calc(-100% - 18px));
-  z-index: 1350;
+  inset: 0;
+  z-index: 1600;
+  background: rgba(15, 23, 42, 0.42);
+  -webkit-backdrop-filter: blur(4px);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  animation: fadeIn 0.2s ease-out;
 }
 
-.ol-popup::after {
-  content: "";
-  position: absolute;
-  bottom: -8px;
-  left: 50%;
-  transform: translateX(-50%);
-  border-width: 8px 8px 0;
-  border-style: solid;
-  border-color: var(--surface-solid) transparent transparent;
-}
-
-.ol-popup.hidden {
+.postcode-modal-backdrop.hidden {
   display: none;
 }
 
-.ol-popup-closer {
-  position: absolute;
-  top: 8px;
-  right: 10px;
-  background: transparent;
-  border: none;
-  font-size: 20px;
-  color: #64748b;
-  cursor: pointer;
+.postcode-result-card {
+  width: 100%;
+  max-width: 780px;
+  background: var(--surface-solid);
+  color: var(--text-main);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  padding: 20px 22px 22px;
+  animation: popScale 0.22s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-.popup-header-tag {
-  font-size: 10px;
+.postcode-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.postcode-card-top h2 {
+  font-size: 18px;
   font-weight: 700;
-  letter-spacing: 0.6px;
-  color: var(--accent);
-  margin-bottom: 3px;
+  color: var(--text-main);
+  letter-spacing: -0.2px;
 }
 
-.popup-postcode {
+.postcode-card-close {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--surface-subtle);
+  color: var(--text-muted);
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition:
+    background 0.15s,
+    color 0.15s;
+}
+
+.postcode-card-close:hover {
+  background: var(--surface-hover);
+  color: var(--text-main);
+}
+
+.postcode-card-grid {
+  display: grid;
+  grid-template-columns: 1.25fr 1fr;
+  gap: 22px;
+  align-items: center;
+}
+
+/* Left Column: Embedded Satellite / Map Preview */
+.postcode-minimap-box {
+  position: relative;
+  width: 100%;
+  height: 295px;
+  border-radius: 14px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  background: #1e293b;
+}
+
+.popup-mini-map {
+  width: 100%;
+  height: 100%;
+}
+
+.popup-mini-map .ol-zoom,
+.popup-mini-map .ol-attribution {
+  font-size: 9px !important;
+}
+
+.popup-mini-map .ol-zoom {
+  display: none !important;
+}
+
+.minimap-layer-pill {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 20;
+  background: var(--gold-btn);
+  color: #0f172a;
+  border: none;
+  border-radius: 999px;
+  padding: 6px 15px;
+  font-size: 12.5px;
+  font-weight: 700;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.28);
+  cursor: pointer;
+  transition:
+    background 0.15s,
+    transform 0.15s;
+}
+
+.minimap-layer-pill:hover {
+  background: var(--gold-btn-hover);
+}
+
+.minimap-layer-pill:active {
+  transform: scale(0.95);
+}
+
+/* Right Column: Gold Postcode Pill, Copy, Location, Directions & Share */
+.postcode-info-col {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 4px 6px;
+}
+
+.postcode-code-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.postcode-gold-pill {
+  flex: 1;
+  text-align: center;
+  padding: 11px 18px;
+  border: 1.8px solid var(--gold-pill-border);
+  background: var(--gold-pill-bg);
+  color: var(--gold-pill-text);
+  border-radius: 999px;
   font-size: 17px;
   font-weight: 800;
-  color: var(--primary);
-  letter-spacing: 0.4px;
+  letter-spacing: 0.9px;
+  white-space: nowrap;
 }
 
-.popup-admin {
-  font-size: 12.5px;
+.postcode-copy-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--surface-subtle);
   color: var(--text-main);
-  margin-top: 4px;
-  line-height: 1.35;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition:
+    background 0.15s,
+    color 0.15s;
 }
 
-.popup-coords {
-  font-size: 11px;
+.postcode-copy-btn:hover {
+  background: var(--surface-hover);
+  color: var(--primary);
+}
+
+.postcode-location-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--text-main);
+  padding-left: 2px;
+}
+
+.postcode-location-line svg {
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.postcode-coords-sub {
+  font-size: 11.5px;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   color: var(--text-muted);
-  margin-top: 5px;
+  padding-left: 27px;
+  margin-top: -6px;
 }
 
-.popup-action-btn {
-  margin-top: 10px;
-  width: 100%;
-  padding: 8px 10px;
-  background: var(--primary);
-  color: #ffffff;
-  border: none;
-  border-radius: 8px;
-  font-size: 12.5px;
+.postcode-pill-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 2px;
+}
+
+.pill-outline-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 10px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface-solid);
+  color: var(--text-main);
+  font-size: 13.5px;
   font-weight: 600;
   cursor: pointer;
+  transition:
+    background 0.15s,
+    border-color 0.15s;
+}
+
+.pill-outline-btn:hover {
+  background: var(--surface-hover);
+  border-color: var(--primary);
+}
+
+.popup-save-field-btn {
+  margin-top: 4px;
+  width: 100%;
+  padding: 11px 16px;
+  border-radius: 999px;
+  border: none;
+  background: var(--primary);
+  color: #ffffff;
+  font-size: 13.5px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: var(--shadow-sm);
   transition: background 0.15s;
 }
 
-.popup-action-btn:hover {
+[data-theme="dark"] .popup-save-field-btn {
+  color: #042f2e;
+}
+
+.popup-save-field-btn:hover {
   background: var(--primary-hover);
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes popScale {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
 }
 
 /* Left Floating GIS Tool Dock */
@@ -431,9 +703,9 @@ html {
   width: 42px;
   height: 42px;
   border-radius: 10px;
-  background: #ffffff;
+  background: var(--surface-solid);
   color: var(--text-main);
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--border);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -442,26 +714,28 @@ html {
 }
 
 .small-btn:hover {
-  background: #f1f5f9;
+  background: var(--surface-hover);
   color: var(--primary);
-  border-color: #cbd5e1;
 }
 
 .small-btn.active {
   background: var(--primary);
   color: #ffffff;
   border-color: var(--primary);
-  box-shadow: 0 3px 10px rgba(15, 76, 92, 0.3);
+}
+
+[data-theme="dark"] .small-btn.active {
+  color: #042f2e;
 }
 
 .export-btn {
-  background: #f0fdfa;
-  border-color: #99f6e4;
-  color: #0f766e;
+  background: rgba(13, 148, 136, 0.12);
+  border-color: rgba(13, 148, 136, 0.35);
+  color: var(--accent);
 }
 
 .export-btn:hover {
-  background: #ccfbf1;
+  background: rgba(13, 148, 136, 0.22);
 }
 
 .btn-tag {
@@ -471,20 +745,19 @@ html {
 }
 
 .danger-btn {
-  background: #fef2f2;
-  border-color: #fecaca;
-  color: #dc2626;
+  background: rgba(220, 38, 38, 0.1);
+  border-color: rgba(220, 38, 38, 0.3);
+  color: #ef4444;
 }
 
 .danger-btn:hover {
-  background: #fee2e2;
-  color: #b91c1c;
+  background: rgba(220, 38, 38, 0.2);
 }
 
 .export-divider {
   width: 100%;
   height: 1px;
-  background-color: #e2e8f0;
+  background-color: var(--border);
   margin: 2px 0;
 }
 
@@ -505,7 +778,7 @@ html {
   border-radius: 12px;
   background: var(--primary);
   color: #ffffff;
-  border: 1px solid rgba(255, 255, 255, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.2);
   box-shadow: var(--shadow-md);
   display: flex;
   align-items: center;
@@ -514,6 +787,10 @@ html {
   transition:
     transform 0.15s,
     background 0.15s;
+}
+
+[data-theme="dark"] .bottom-toolbar .tool-btn {
+  color: #042f2e;
 }
 
 .bottom-toolbar .tool-btn:active {
@@ -528,11 +805,12 @@ html {
 
 #btn-toggle-basemap:hover {
   color: var(--primary);
-  background: #ffffff;
+  background: var(--surface-solid);
 }
 
 .tool-btn.tracking {
   background: #dc2626 !important;
+  color: #ffffff !important;
   animation: pulse 2s infinite;
 }
 
@@ -554,7 +832,7 @@ html {
   bottom: 10px;
   left: 14px;
   z-index: 950;
-  background: rgba(15, 23, 42, 0.78);
+  background: rgba(15, 23, 42, 0.82);
   color: #f8fafc;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 11px;
@@ -596,10 +874,12 @@ html {
   max-width: 380px;
   height: 100%;
   background: var(--surface-solid);
+  color: var(--text-main);
+  border-left: 1px solid var(--border);
   z-index: 2000;
   display: flex;
   flex-direction: column;
-  box-shadow: -8px 0 30px rgba(15, 23, 42, 0.16);
+  box-shadow: -8px 0 30px rgba(0, 0, 0, 0.25);
   transform: translateX(0);
   transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1);
 }
@@ -613,7 +893,7 @@ html {
   justify-content: space-between;
   align-items: center;
   padding: 16px 20px;
-  background: var(--primary);
+  background: #0f4c5c;
   color: #ffffff;
 }
 
@@ -662,7 +942,7 @@ html {
 .field-group label {
   font-size: 13px;
   font-weight: 600;
-  color: #334155;
+  color: var(--text-muted);
 }
 
 .panel-body input,
@@ -670,11 +950,11 @@ html {
 .panel-body textarea {
   width: 100%;
   padding: 10px 12px;
-  border: 1px solid #cbd5e1;
+  border: 1px solid var(--border-strong);
   border-radius: 8px;
   font-size: 15px;
   color: var(--text-main);
-  background: #ffffff;
+  background: var(--input-bg);
   transition: border-color 0.15s;
 }
 
@@ -688,8 +968,8 @@ html {
 /* NIPOST Postcode Card inside Drawer */
 .postcode-section {
   padding: 12px;
-  background: #f8fafc;
-  border: 1px solid #cbd5e1;
+  background: var(--surface-subtle);
+  border: 1px solid var(--border-strong);
   border-radius: 10px;
   display: flex;
   flex-direction: column;
@@ -711,8 +991,9 @@ html {
 .api-chip {
   font-size: 10px;
   font-weight: 700;
-  background: #e0f2fe;
-  color: #0369a1;
+  background: var(--gold-pill-bg);
+  color: var(--gold-pill-text);
+  border: 1px solid var(--gold-pill-border);
   padding: 2px 7px;
   border-radius: 999px;
 }
@@ -742,8 +1023,12 @@ html {
   white-space: nowrap;
 }
 
+[data-theme="dark"] .postcode-sub-btn {
+  color: #042f2e;
+}
+
 .postcode-sub-btn.secondary {
-  background: #ffffff;
+  background: var(--surface-solid);
   color: var(--primary);
   border: 1px solid var(--primary);
 }
@@ -760,18 +1045,22 @@ html {
 }
 
 .postcode-status[data-status="verified"] {
-  color: #15803d;
+  color: #16a34a;
   font-weight: 600;
 }
 
+[data-theme="dark"] .postcode-status[data-status="verified"] {
+  color: #4ade80;
+}
+
 .postcode-status[data-status="offline_pending"] {
-  color: #b45309;
+  color: #d97706;
   font-weight: 600;
 }
 
 .postcode-status[data-status="invalid_format"],
 .postcode-status[data-status="not_found"] {
-  color: #b91c1c;
+  color: #ef4444;
   font-weight: 600;
 }
 
@@ -790,14 +1079,14 @@ html {
 .mini-field span {
   font-size: 10.5px;
   font-weight: 600;
-  color: #64748b;
+  color: var(--text-muted);
 }
 
 .mini-field input {
   padding: 6px 8px;
   font-size: 12.5px;
-  background: #ffffff;
-  color: #1e293b;
+  background: var(--input-bg);
+  color: var(--text-main);
   border-radius: 6px;
 }
 
@@ -811,8 +1100,12 @@ html {
   font-size: 15px;
   font-weight: 700;
   cursor: pointer;
-  box-shadow: 0 4px 12px rgba(15, 76, 92, 0.25);
+  box-shadow: var(--shadow-sm);
   transition: background 0.15s;
+}
+
+[data-theme="dark"] .primary-save-btn {
+  color: #042f2e;
 }
 
 .primary-save-btn:hover {
@@ -840,6 +1133,7 @@ html {
   font-size: 13px;
   font-weight: 600;
   box-shadow: var(--shadow-lg);
+  border: 1px solid rgba(255, 255, 255, 0.12);
   animation: fadeUp 0.22s ease-out;
 }
 
@@ -863,7 +1157,7 @@ html {
 }
 
 /* Mobile Responsive Adjustments */
-@media (max-width: 640px) {
+@media (max-width: 680px) {
   .top-hud {
     top: 10px;
     left: 10px;
@@ -886,6 +1180,26 @@ html {
   .draw-toolbar {
     top: 112px;
     left: 10px;
+  }
+
+  .postcode-result-card {
+    padding: 16px;
+    max-height: 88vh;
+    overflow-y: auto;
+  }
+
+  .postcode-card-grid {
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
+
+  .postcode-minimap-box {
+    height: 210px;
+  }
+
+  .postcode-gold-pill {
+    font-size: 15px;
+    padding: 9px 12px;
   }
 
   .ol-zoom {

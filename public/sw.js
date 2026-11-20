@@ -1,5 +1,5 @@
 // public/sw.js
-const CACHE_NAME = 'geofield-cache-v4';
+const CACHE_NAME = 'geofield-cache-v5';
 
 const ASSETS_TO_CACHE = [
   '/',

@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="light">
   <head>
     <meta charset="UTF-8" />
     <meta
@@ -11,7 +11,7 @@
       name="apple-mobile-web-app-status-bar-style"
       content="black-translucent"
     />
-    <meta name="theme-color" content="#0f4c5c" />
+    <meta id="meta-theme-color" name="theme-color" content="#0f4c5c" />
     <title>GeoField Tracker — Spatial Intelligence & NIPOST GIS</title>
     <link rel="stylesheet" href="/src/style.css" />
     <link rel="manifest" href="/manifest.json" />
@@ -20,7 +20,7 @@
   </head>
   <body>
     <div id="app-container">
-      <!-- Top Floating HUD: Brand, Status & NIPOST Postcode Search -->
+      <!-- Top Floating HUD: Brand, Status, Theme Switcher & NIPOST Search -->
       <header class="top-hud">
         <div class="brand-pill">
           <div class="brand-title">
@@ -42,12 +42,59 @@
             </svg>
             <span>GeoField</span>
           </div>
+
           <div class="hud-badges">
             <span id="network-badge" class="status-pill online">
               <span class="dot"></span>
               <span id="network-text">Online</span>
             </span>
             <span id="feature-count" class="count-pill">0 Features</span>
+
+            <!-- Light / Dark Mode Switcher -->
+            <button
+              type="button"
+              id="btn-toggle-theme"
+              class="theme-toggle-btn"
+              aria-label="Toggle Light and Dark Theme"
+              title="Switch to Dark Mode"
+            >
+              <!-- Moon icon (shown in Light Mode) -->
+              <svg
+                class="icon-moon"
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2.2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"></path>
+              </svg>
+              <!-- Sun icon (shown in Dark Mode) -->
+              <svg
+                class="icon-sun hidden"
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2.2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <circle cx="12" cy="12" r="4"></circle>
+                <path d="M12 2v2"></path>
+                <path d="M12 20v2"></path>
+                <path d="m4.93 4.93 1.41 1.41"></path>
+                <path d="m17.66 17.66 1.41 1.41"></path>
+                <path d="M2 12h2"></path>
+                <path d="M20 12h2"></path>
+                <path d="m6.34 17.66-1.41 1.41"></path>
+                <path d="m19.07 4.93-1.41 1.41"></path>
+              </svg>
+            </button>
           </div>
         </div>
 
@@ -70,7 +117,7 @@
             <input
               type="text"
               id="map-search-input"
-              placeholder="Search NIPOST postcode (e.g. FC01A01KP27) or area..."
+              placeholder="Search postcode (e.g. KD 11 C34 BY 16) or area..."
               autocomplete="off"
             />
             <button
@@ -82,7 +129,7 @@
               ×
             </button>
             <button type="button" id="btn-map-search" class="search-submit-btn">
-              Locate
+              Find postcode
             </button>
           </div>
           <div
@@ -115,33 +162,6 @@
 
       <!-- Main OpenLayers Map Canvas -->
       <div id="map" class="map">
-        <!-- Floating Map Popup Overlay for Searched Postcode -->
-        <div id="map-popup" class="ol-popup hidden">
-          <button
-            type="button"
-            id="popup-close"
-            class="ol-popup-closer"
-            aria-label="Close popup"
-          >
-            ×
-          </button>
-          <div class="popup-header-tag">NIPOST VERIFIED LOCATION</div>
-          <div id="popup-postcode" class="popup-postcode">FC-01-A01-KP-27</div>
-          <div id="popup-admin" class="popup-admin">
-            Abuja • Municipal Area Council
-          </div>
-          <div id="popup-coords" class="popup-coords">
-            9.05850° N, 7.48906° E
-          </div>
-          <button
-            type="button"
-            id="popup-save-feature"
-            class="popup-action-btn"
-          >
-            + Save Pin to Field Data
-          </button>
-        </div>
-
         <!-- Left Floating GIS Tool Dock -->
         <div
           class="draw-toolbar"
@@ -284,6 +304,156 @@
         </div>
       </div>
 
+      <!-- NIPOST "Here is the postcode" Result Popup Card -->
+      <div
+        id="postcode-result-modal"
+        class="postcode-modal-backdrop hidden"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="postcode-modal-heading"
+      >
+        <div class="postcode-result-card">
+          <div class="postcode-card-top">
+            <h2 id="postcode-modal-heading">Here is the postcode</h2>
+            <button
+              type="button"
+              id="popup-close"
+              class="postcode-card-close"
+              aria-label="Close postcode card"
+            >
+              ×
+            </button>
+          </div>
+
+          <div class="postcode-card-grid">
+            <!-- Left Column: Embedded Satellite / Map Preview with Postcode Badges -->
+            <div class="postcode-minimap-box">
+              <div id="popup-mini-map" class="popup-mini-map"></div>
+              <button
+                type="button"
+                id="btn-minimap-layer"
+                class="minimap-layer-pill"
+              >
+                Map
+              </button>
+            </div>
+
+            <!-- Right Column: Spaced Postcode Pill, Copy, Location, Directions & Share -->
+            <div class="postcode-info-col">
+              <div class="postcode-code-row">
+                <div id="popup-postcode" class="postcode-gold-pill">
+                  KD 11 C34 BY 16
+                </div>
+                <button
+                  type="button"
+                  id="btn-copy-postcode"
+                  class="postcode-copy-btn"
+                  title="Copy Postcode"
+                  aria-label="Copy Postcode"
+                >
+                  <svg
+                    width="18"
+                    height="18"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <rect
+                      width="14"
+                      height="14"
+                      x="8"
+                      y="8"
+                      rx="2"
+                      ry="2"
+                    ></rect>
+                    <path
+                      d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"
+                    ></path>
+                  </svg>
+                </button>
+              </div>
+
+              <div class="postcode-location-line">
+                <svg
+                  width="17"
+                  height="17"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path
+                    d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"
+                  ></path>
+                  <circle cx="12" cy="10" r="3"></circle>
+                </svg>
+                <span id="popup-admin">Kagarko, Kaduna</span>
+              </div>
+
+              <div id="popup-coords" class="postcode-coords-sub">
+                9.05850° N, 7.48906° E
+              </div>
+
+              <div class="postcode-pill-actions">
+                <button
+                  type="button"
+                  id="btn-postcode-directions"
+                  class="pill-outline-btn"
+                >
+                  <svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2.1"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <polygon points="3 11 22 2 13 21 11 13 3 11"></polygon>
+                  </svg>
+                  <span>Directions</span>
+                </button>
+                <button
+                  type="button"
+                  id="btn-postcode-share"
+                  class="pill-outline-btn"
+                >
+                  <svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2.1"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"></path>
+                    <polyline points="16 6 12 2 8 6"></polyline>
+                    <line x1="12" y1="2" x2="12" y2="15"></line>
+                  </svg>
+                  <span>Share</span>
+                </button>
+              </div>
+
+              <button
+                type="button"
+                id="popup-save-feature"
+                class="popup-save-field-btn"
+              >
+                + Save Pin to Field Data
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- Bottom-Left Live Coordinate Status Bar -->
       <div id="coord-readout" class="coord-readout">
         9.05851° N, 7.48906° E • EPSG:4326
@@ -393,7 +563,7 @@
                 type="text"
                 id="feat-postcode"
                 maxlength="15"
-                placeholder="e.g. FC01A01KP27"
+                placeholder="e.g. KD 11 C34 BY 16"
               />
               <button
                 type="button"

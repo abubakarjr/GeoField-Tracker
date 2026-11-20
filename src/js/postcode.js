@@ -16,10 +16,22 @@ export function normalizePostcode(raw) {
   return raw.replace(/[^a-zA-Z0-9]/g, '').toUpperCase().trim();
 }
 
+/**
+ * Formats an 11-character postcode into NIPOST API hyphenated format (e.g., "KD-11-C34-BY-16")
+ */
 export function formatHyphenatedPostcode(raw) {
   const clean = normalizePostcode(raw);
   if (clean.length !== 11) return clean;
   return `${clean.slice(0, 2)}-${clean.slice(2, 4)}-${clean.slice(4, 7)}-${clean.slice(7, 9)}-${clean.slice(9, 11)}`;
+}
+
+/**
+ * Formats an 11-character postcode into display spaced format (e.g., "KD 11 C34 BY 16")
+ */
+export function formatSpacedPostcode(raw) {
+  const clean = normalizePostcode(raw);
+  if (clean.length !== 11) return clean;
+  return `${clean.slice(0, 2)} ${clean.slice(2, 4)} ${clean.slice(4, 7)} ${clean.slice(7, 9)} ${clean.slice(9, 11)}`;
 }
 
 function extractCoordinates(record) {
@@ -99,7 +111,7 @@ export async function lookupPostcode(rawCode) {
     return {
       status: 'invalid_format',
       postcode: clean,
-      message: 'Enter a valid 11-character postcode (e.g., FC01A01KP27).',
+      message: 'Enter a valid 11-character postcode (e.g., KD 11 C34 BY 16).',
     };
   }
 
@@ -129,6 +141,7 @@ export async function lookupPostcode(rawCode) {
       status: 'verified',
       postcode: clean,
       formattedPostcode: formatted,
+      spacedPostcode: formatSpacedPostcode(clean),
       admin: mapAdminFields(record),
       coords: extractCoordinates(record),
       message: 'Verified with NIPOST Postcode API.',
@@ -212,6 +225,7 @@ export async function searchPostcodeByGeometry(geometry, fallbackQuery = '') {
       status: 'verified',
       postcode: clean,
       formattedPostcode: formatHyphenatedPostcode(clean),
+      spacedPostcode: formatSpacedPostcode(clean),
       admin: mapAdminFields(item),
       coords: extractCoordinates(item),
       message: 'Postcode matched via NIPOST Search.',
@@ -227,7 +241,7 @@ export async function searchPostcodeByGeometry(geometry, fallbackQuery = '') {
 
 /**
  * Top Map Search Bar: Searches by 11-character postcode OR area/address query
- * Returns an array of normalized map results with postcode, admin hierarchy & coordinates
+ * Also collects nearby postcodes in the same cell/sector for the popup mini-map
  */
 export async function searchPostcodeOrPlace(rawQuery) {
   const trimmed = (rawQuery || '').trim();
@@ -244,50 +258,79 @@ export async function searchPostcodeOrPlace(rawQuery) {
   const normalized = normalizePostcode(trimmed);
   const looksLikePostcode = /^[A-Z]{2}\d{2}[A-Z0-9]{7}$/.test(normalized);
 
-  // 1. If the user typed an 11-character postcode, run Lookup first
   if (looksLikePostcode) {
     const lookupRes = await lookupPostcode(normalized);
     if (lookupRes.status === 'verified') {
       let coords = lookupRes.coords;
+      let nearby = [];
 
-      // If Lookup didn't return coordinates, query /v1/search with the formatted postcode
-      if (!coords) {
-        try {
-          const searchUrl = `${BASE_URL}/v1/search?q=${encodeURIComponent(lookupRes.formattedPostcode)}`;
-          const sRes = await fetchWithTimeout(searchUrl, { headers: getHeaders() });
-          const first = Array.isArray(sRes.data) ? sRes.data[0] : (sRes.data || sRes);
-          coords = extractCoordinates(first);
-        } catch {
-          // Proceed even if sandbox record lacks coordinates
+      // Query /v1/search using the 7-character sector prefix (e.g., "KD-11-C34") to find nearby building codes
+      try {
+        const sectorPrefix = `${normalized.slice(0, 2)}-${normalized.slice(2, 4)}-${normalized.slice(4, 7)}`;
+        const searchUrl = `${BASE_URL}/v1/search?q=${encodeURIComponent(sectorPrefix)}`;
+        const sRes = await fetchWithTimeout(searchUrl, { headers: getHeaders() });
+        const rawList = Array.isArray(sRes.data) ? sRes.data : (sRes.data ? [sRes.data] : []);
+
+        const matchedTarget = rawList.find(
+          (r) => normalizePostcode(r.postcode || r.code) === normalized
+        );
+        if (!coords && matchedTarget) {
+          coords = extractCoordinates(matchedTarget);
         }
+
+        nearby = rawList
+          .map((r) => {
+            const code = normalizePostcode(r.postcode || r.code);
+            return {
+              postcode: code,
+              shortCode: code.slice(-4),
+              coords: extractCoordinates(r),
+            };
+          })
+          .filter((r) => r.postcode && r.postcode !== normalized && r.coords);
+      } catch {
+        // Proceed gracefully if nearby search is unavailable in sandbox
       }
 
       return [
         {
           postcode: lookupRes.postcode,
           formattedPostcode: lookupRes.formattedPostcode,
+          spacedPostcode: lookupRes.spacedPostcode,
           admin: lookupRes.admin,
           coords,
+          nearby,
         },
       ];
     }
   }
 
-  // 2. Otherwise query NIPOST /v1/search for matching postcodes or places
   const url = `${BASE_URL}/v1/search?q=${encodeURIComponent(trimmed)}`;
   const res = await fetchWithTimeout(url, { headers: getHeaders() });
   const list = Array.isArray(res.data) ? res.data : (res.data ? [res.data] : []);
 
-  return list
+  const mapped = list
     .filter((item) => item && (item.postcode || item.code))
-    .slice(0, 6)
+    .slice(0, 8)
     .map((item) => {
       const clean = normalizePostcode(item.postcode || item.code);
       return {
         postcode: clean,
         formattedPostcode: formatHyphenatedPostcode(clean),
+        spacedPostcode: formatSpacedPostcode(clean),
         admin: mapAdminFields(item),
         coords: extractCoordinates(item),
       };
     });
+
+  return mapped.map((entry, idx) => ({
+    ...entry,
+    nearby: mapped
+      .filter((other, oIdx) => oIdx !== idx && other.coords)
+      .map((other) => ({
+        postcode: other.postcode,
+        shortCode: other.postcode.slice(-4),
+        coords: other.coords,
+      })),
+  }));
 }
